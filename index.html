@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZENAB AI – IoT Digital Twin</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/dracula.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="ide-root">
+
+    <!-- ── TOP BAR ── -->
+    <header class="topbar">
+        <div class="topbar-brand">
+            <i class="fa-solid fa-leaf"></i>
+            <span>ZENAB AI &mdash; IoT Digital Twin</span>
+        </div>
+        <div class="topbar-controls">
+            <button id="btn-run"   class="tb-btn run">  <i class="fa-solid fa-play"></i>   Run</button>
+            <button id="btn-pause" class="tb-btn pause"><i class="fa-solid fa-pause"></i>  Pause</button>
+            <button id="btn-reset" class="tb-btn reset"><i class="fa-solid fa-rotate-right"></i> Reset</button>
+            <div class="env-wrap">
+                <i class="fa-solid fa-earth-americas"></i>
+                <select id="env-mode">
+                    <option value="clean">Clean Environment</option>
+                    <option value="urban">Urban Pollution</option>
+                    <option value="industrial">Industrial Zone</option>
+                    <option value="toxic">Toxic Leak Emergency</option>
+                </select>
+            </div>
+        </div>
+    </header>
+
+    <!-- ── MAIN WORKSPACE ── -->
+    <div class="workspace">
+
+        <!-- PANE 1: Firmware Editor -->
+        <section class="pane pane-editor">
+            <div class="pane-title"><i class="fa-solid fa-code"></i> Firmware Editor</div>
+            <div class="pane-body editor-body">
+                <textarea id="code-editor"></textarea>
+            </div>
+        </section>
+
+        <!-- PANE 2: Circuit Canvas -->
+        <section class="pane pane-canvas">
+            <div class="pane-title">
+                <span><i class="fa-solid fa-microchip"></i> Circuit Simulation</span>
+                <a href="circuit.png" download="ZENAB_Circuit_Schematic.png" class="title-action-btn" title="Download Schematic">
+                    <i class="fa-solid fa-download"></i>
+                </a>
+            </div>
+            <div class="pane-body canvas-body" id="canvas">
+
+                <!-- ── CIRCUIT BOARD ── -->
+                <div class="board">
+
+                    <!-- Arduino UNO Centre -->
+                    <div class="comp comp-mcu" id="comp-esp32">
+                        <div class="comp-inner">
+                            <div class="comp-led" id="esp-led"></div>
+                            <span class="comp-name">Arduino UNO</span>
+                            <span class="comp-sub">ATmega328P</span>
+                        </div>
+                    </div>
+
+                    <!-- LCD -->
+                    <div class="comp comp-lcd" id="comp-lcd">
+                        <div class="lcd-screen">
+                            <div class="lcd-row">AQI:<b id="lcd-aqi"> –</b> PM2.5:<b id="lcd-pm25"> –</b></div>
+                            <div class="lcd-row">O₂:<b id="lcd-o2"> –</b>% GPS:<b id="lcd-gps"> WAIT</b></div>
+                            <div class="lcd-row small">NET:<b id="lcd-net"> DISCONNECTED</b></div>
+                        </div>
+                        <span class="comp-pin-label">I2C (21,22)</span>
+                    </div>
+
+                    <!-- SPS30 -->
+                    <div class="comp comp-sensor top-left" id="comp-sps30">
+                        <i class="fa-solid fa-wind"></i>
+                        <span class="comp-name">SPS30</span>
+                        <span class="live-badge" id="mod-pm25">–</span>
+                        <span class="comp-pin-label">I2C (21,22)</span>
+                    </div>
+
+                    <!-- MQ135 -->
+                    <div class="comp comp-sensor top-mid" id="comp-mq135">
+                        <i class="fa-solid fa-smog"></i>
+                        <span class="comp-name">MQ135</span>
+                        <span class="live-badge" id="mod-gas">–</span>
+                        <span class="comp-pin-label">ADC (34)</span>
+                    </div>
+
+                    <!-- DHT22 -->
+                    <div class="comp comp-sensor top-right" id="comp-dht22">
+                        <i class="fa-solid fa-temperature-half"></i>
+                        <span class="comp-name">DHT22</span>
+                        <span class="live-badge" id="mod-temp">–</span>
+                        <span class="comp-pin-label">GPIO (4)</span>
+                    </div>
+
+                    <!-- ABD Sensor -->
+                    <div class="comp comp-sensor left-mid" id="comp-abd">
+                        <i class="fa-solid fa-skull-crossbones"></i>
+                        <span class="comp-name">ABD</span>
+                        <span class="live-badge" id="mod-abd">–</span>
+                        <span class="comp-pin-label">ADC (35)</span>
+                    </div>
+
+                    <!-- GPS -->
+                    <div class="comp comp-sensor right-mid" id="comp-gps">
+                        <i class="fa-solid fa-location-dot"></i>
+                        <span class="comp-name">GPS NEO-6M</span>
+                        <span class="live-badge" id="mod-gps">12.97, 77.59</span>
+                        <span class="comp-pin-label">UART (16,17)</span>
+                    </div>
+
+                    <!-- ESP8266 WiFi -->
+                    <div class="comp comp-comm bottom-left" id="comp-wifi">
+                        <i class="fa-solid fa-wifi"></i>
+                        <span class="comp-name">ESP8266</span>
+                        <span class="live-badge" id="mod-wifi">–</span>
+                        <span class="comp-pin-label">UART</span>
+                    </div>
+
+                    <!-- SIM900 GSM -->
+                    <div class="comp comp-comm bottom-mid" id="comp-gsm">
+                        <i class="fa-solid fa-tower-broadcast"></i>
+                        <span class="comp-name">SIM900A</span>
+                        <span class="live-badge" id="mod-gsm">Standby</span>
+                        <span class="comp-pin-label">UART (GSM)</span>
+                    </div>
+
+                    <!-- Power & Fan -->
+                    <div class="comp comp-power bottom-right" id="comp-power">
+                        <i class="fa-solid fa-solar-panel"></i>
+                        <span class="comp-name">Power</span>
+                        <span class="live-badge" id="mod-power">Solar 100%</span>
+                        <span class="comp-pin-label">VIN/ADC(32)</span>
+                    </div>
+
+                    <!-- Fan Actuator -->
+                    <div class="comp comp-act act-fan" id="comp-fan">
+                        <i class="fa-solid fa-fan"></i>
+                        <span class="comp-name">Smart Fan</span>
+                        <span class="live-badge" id="mod-fan-val">OFF</span>
+                        <span class="comp-pin-label">PWM (18)</span>
+                    </div>
+
+                    <!-- Burn Chamber -->
+                    <div class="comp comp-act act-burn" id="comp-chamber">
+                        <i class="fa-solid fa-fire-burner"></i>
+                        <span class="comp-name">Burn Chamber</span>
+                        <span class="live-badge" id="mod-chamber-val">OFF</span>
+                        <span class="comp-pin-label">GPIO (19)</span>
+                    </div>
+
+                    <!-- SVG wires -->
+                    <svg class="wire-svg" id="wiring-layer"></svg>
+
+                </div><!-- /board -->
+            </div>
+        </section>
+
+        <!-- PANE 3: Live Telemetry -->
+        <section class="pane pane-telemetry">
+            <div class="pane-title"><i class="fa-solid fa-chart-line"></i> Live Telemetry</div>
+            <div class="pane-body telemetry-body">
+
+                <div class="tele-group-title">Air Sensors</div>
+                <div class="tele-card" id="tele-card-pm25">
+                    <i class="fa-solid fa-wind tele-icon blue"></i>
+                    <div class="tele-info">
+                        <div class="tele-label">SPS30 &ndash; PM2.5</div>
+                        <div class="tele-value" id="tele-pm25">&ndash;</div>
+                    </div>
+                    <div class="tele-bar-wrap"><div class="tele-bar" id="bar-pm25"></div></div>
+                </div>
+                <div class="tele-card" id="tele-card-gas">
+                    <i class="fa-solid fa-smog tele-icon yellow"></i>
+                    <div class="tele-info">
+                        <div class="tele-label">MQ135 &ndash; Gas</div>
+                        <div class="tele-value" id="tele-gas">&ndash;</div>
+                    </div>
+                    <div class="tele-bar-wrap"><div class="tele-bar" id="bar-gas"></div></div>
+                </div>
+                <div class="tele-card" id="tele-card-temp">
+                    <i class="fa-solid fa-temperature-half tele-icon orange"></i>
+                    <div class="tele-info">
+                        <div class="tele-label">DHT22 &ndash; Temp/Hum</div>
+                        <div class="tele-value" id="tele-temp">&ndash;</div>
+                    </div>
+                </div>
+                <div class="tele-card" id="tele-card-abd">
+                    <i class="fa-solid fa-skull-crossbones tele-icon red"></i>
+                    <div class="tele-info">
+                        <div class="tele-label">ABD &ndash; Toxic Gas</div>
+                        <div class="tele-value" id="tele-abd">&ndash;</div>
+                    </div>
+                    <div class="tele-bar-wrap"><div class="tele-bar red-bar" id="bar-abd"></div></div>
+                </div>
+
+                <div class="tele-group-title">Connectivity</div>
+                <div class="tele-card" id="tele-card-gps">
+                    <i class="fa-solid fa-location-dot tele-icon green"></i>
+                    <div class="tele-info">
+                        <div class="tele-label">GPS NEO-6M</div>
+                        <div class="tele-value" id="tele-gps">12.9716, 77.5946</div>
+                    </div>
+                </div>
+
+                <div class="tele-group-title">Power &amp; Actuators</div>
+                <div class="tele-card" id="tele-card-power">
+                    <i class="fa-solid fa-solar-panel tele-icon yellow"></i>
+                    <div class="tele-info">
+                        <div class="tele-label">Power System</div>
+                        <div class="tele-value" id="tele-power">Solar 100%</div>
+                    </div>
+                    <div class="tele-bar-wrap"><div class="tele-bar green-bar" id="bar-battery"></div></div>
+                </div>
+                <div class="tele-card actuator" id="tele-card-fan">
+                    <i class="fa-solid fa-fan tele-icon blue"></i>
+                    <div class="tele-info">
+                        <div class="tele-label">Smart Fan (PWM)</div>
+                        <div class="tele-value" id="tele-fan">OFF</div>
+                    </div>
+                </div>
+                <div class="tele-card actuator" id="tele-card-burn">
+                    <i class="fa-solid fa-fire-burner tele-icon red"></i>
+                    <div class="tele-info">
+                        <div class="tele-label">Burn Chamber</div>
+                        <div class="tele-value" id="tele-burn">OFF</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PANE 4: Serial & Cloud -->
+        <section class="pane pane-serial">
+            <div class="pane-title"><i class="fa-solid fa-terminal"></i> Serial &amp; Cloud</div>
+            <div class="pane-body serial-body">
+                <div class="cloud-box">
+                    <label>Cloud Endpoint</label>
+                    <input type="text" id="api-url" value="http://127.0.0.1:5000/api/data" placeholder="https:// or wss://">
+                    <div class="cloud-status">Cloud: <span id="cloud-status-text" class="offline">Offline</span></div>
+                    <a href="../zenab-backend/dashboard.html" target="_blank" class="dashboard-link">
+                        <i class="fa-solid fa-chart-simple"></i> View Database
+                    </a>
+                </div>
+                <div class="serial-terminal" id="terminal-output">
+                    <div>&gt; ZENAB IDE Ready.</div>
+                </div>
+            </div>
+        </section>
+
+    </div><!-- /workspace -->
+</div><!-- /ide-root -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/clike/clike.min.js"></script>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
