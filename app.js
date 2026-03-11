@@ -428,6 +428,25 @@ btnReset.addEventListener('click', () => {
     drawWires();
 });
 
+// Update dashboard link based on API URL
+function updateDashboardLink() {
+    const url = apiUrlInput.value.trim();
+    const dashLink = document.getElementById('dashboard-link');
+    if (dashLink && url.startsWith('http')) {
+        try {
+            const origin = new URL(url).origin;
+            dashLink.href = origin;
+        } catch (e) {
+            dashLink.href = "#";
+        }
+    } else if (dashLink) {
+        dashLink.href = "#";
+    }
+}
+
+apiUrlInput.addEventListener('input', updateDashboardLink);
+window.addEventListener('load', updateDashboardLink);
+
 envMode.addEventListener('change', () => {
     logSerial(`Environment changed to: ${envMode.options[envMode.selectedIndex].text}`);
     if (!isRunning) {
