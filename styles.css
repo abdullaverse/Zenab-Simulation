@@ -135,6 +135,61 @@ body {
 .editor-body { height: 100%; }
 .CodeMirror { height: 100% !important; font-family: var(--mono); font-size: 13px; }
 
+/* New styles for editor filename, actions, save button, etc. */
+.pane-title.editor-pane-title { /* Modified existing .pane-title for editor specific title */
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--fg);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.editor-filename {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--blue);
+    background: rgba(88,166,255,0.1);
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(88,166,255,0.2);
+}
+.editor-body { position: relative; display: flex; flex-direction: column; }
+.CodeMirror { flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 13px !important; }
+
+.editor-actions {
+    padding: 10px;
+    background: rgba(255,255,255,0.02);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+.btn-save {
+    background: var(--green);
+    color: #fff;
+    padding: 6px 16px;
+    font-size: 0.8rem;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.btn-save:hover { background: #2ea043; transform: translateY(-1px); }
+.btn-save:active { transform: translateY(0); }
+.save-indicator {
+    font-size: 0.75rem;
+    color: var(--fg-dim);
+    font-style: italic;
+}
+.save-indicator.success { color: var(--green); }
+.save-indicator.working { color: var(--yellow); }
+
 /* ── PANE 2: CIRCUIT BOARD ── */
 .pane-canvas { flex: 1.5; }
 .canvas-body {
@@ -238,18 +293,26 @@ body {
 /* Sensor positions */
 .comp-sensor { border-color: rgba(88,166,255,0.35); }
 .comp-sensor i { color: var(--blue); }
-.top-left  { top: 22%; left:  4%; }
-.top-mid   { top: 22%; left: 50%; transform: translateX(-50%); }
-.top-right { top: 22%; right: 4%; }
-.left-mid  { top: 50%; left:  4%; transform: translateY(-50%); }
-.right-mid { top: 50%; right: 4%; transform: translateY(-50%); }
+#comp-pms5003 i { color: #58a6ff; }
+/* ── Structured Grid Positioning ── */
+.pos-r1-c1 { top: 18%; left: 8%; }
+.pos-r1-c2 { top: 18%; left: 35%; transform: translateX(-50%); }
+.pos-r1-c3 { top: 18%; left: 65%; transform: translateX(-50%); }
+.pos-r1-c4 { top: 18%; right: 8%; }
 
-/* Comm modules */
+.pos-r2-c1 { top: 48%; left: 8%; transform: translateY(-50%); }
+.pos-r2-c4 { top: 48%; right: 8%; transform: translateY(-50%); }
+
+.pos-r3-c1 { top: 70%; left: 8%; }
+.pos-r3-c2 { top: 70%; left: 35%; transform: translateX(-50%); }
+.pos-r3-c3 { top: 70%; left: 65%; transform: translateX(-50%); }
+.pos-r3-c4 { top: 70%; right: 8%; }
+
+.pos-r4-c2 { bottom: 6%; left: 50%; transform: translateX(-50%); }
+
+/* Comm and Power */
 .comp-comm { border-color: rgba(210,153,34,0.4); }
 .comp-comm i { color: var(--yellow); }
-.bottom-left  { bottom: 6%; left:  4%; }
-.bottom-mid   { bottom: 6%; left: 50%; transform: translateX(-50%); }
-.bottom-right { bottom: 6%; right: 4%; }
 
 /* Power */
 .comp-power { border-color: rgba(63,185,80,0.4); }
@@ -258,13 +321,23 @@ body {
 /* Actuators */
 .comp-act { border-color: rgba(88,166,255,0.3); }
 .comp-act i { color: var(--blue); }
-.act-fan   { bottom: 22%; left: 4%; }
-.act-burn  { bottom: 22%; right: 4%; }
 
 /* Active/alarm states */
 .comp-active { border-color: var(--green) !important; box-shadow: 0 0 12px rgba(63,185,80,0.3) !important; }
-.comp-alarm  { border-color: var(--red) !important; box-shadow: 0 0 16px rgba(248,81,73,0.4) !important; }
-
+.comp-alarm  { border-color: var(--red) !important; box-shadow: 0 0 15px rgba(248,81,73,0.4) !important; animation: pulse-red 1.5s infinite; }
+.comp-selected { border-color: var(--blue) !important; box-shadow: 0 0 15px rgba(88,166,255,0.5) !important; z-index: 10; transform: scale(1.05) !important; }
+.comp-selected::after {
+    content: 'EDITING';
+    position: absolute;
+    top: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    background: var(--blue);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 10px;
+}
 /* SVG wires overlay */
 .wire-svg {
     position: absolute; inset: 0;

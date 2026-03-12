@@ -37,11 +37,20 @@
     <!-- ── MAIN WORKSPACE ── -->
     <div class="workspace">
 
-        <!-- PANE 1: Firmware Editor -->
+        <!-- PANE 4: Firmware Code Editor -->
         <section class="pane pane-editor">
-            <div class="pane-title"><i class="fa-solid fa-code"></i> Firmware Editor</div>
+            <div class="pane-title">
+                <div><i class="fa-solid fa-code"></i> Firmware Editor</div>
+                <div class="editor-filename" id="current-filename">main.c</div>
+            </div>
             <div class="pane-body editor-body">
                 <textarea id="code-editor"></textarea>
+                <div class="editor-actions">
+                    <button class="btn btn-save" id="btn-save-code">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> Save & Update Firmware
+                    </button>
+                    <span class="save-indicator" id="save-indicator">Ready</span>
+                </div>
             </div>
         </section>
 
@@ -77,84 +86,85 @@
                         <span class="comp-pin-label">I2C (21,22)</span>
                     </div>
 
-                    <!-- SPS30 -->
-                    <div class="comp comp-sensor top-left" id="comp-sps30">
+                    <!-- ROW 1: Air Quality Sensors -->
+                    <div class="comp comp-sensor pos-r1-c1" id="comp-sps30">
                         <i class="fa-solid fa-wind"></i>
                         <span class="comp-name">SPS30</span>
                         <span class="live-badge" id="mod-pm25">–</span>
                         <span class="comp-pin-label">I2C (21,22)</span>
                     </div>
 
-                    <!-- MQ135 -->
-                    <div class="comp comp-sensor top-mid" id="comp-mq135">
+                    <div class="comp comp-sensor pos-r1-c2" id="comp-pms5003">
+                        <i class="fa-solid fa-microchip"></i>
+                        <span class="comp-name">Pms5003</span>
+                        <span class="live-badge" id="mod-pms5003">–</span>
+                        <span class="comp-pin-label">UART (27,26)</span>
+                    </div>
+
+                    <div class="comp comp-sensor pos-r1-c3" id="comp-mq135">
                         <i class="fa-solid fa-smog"></i>
                         <span class="comp-name">MQ135</span>
                         <span class="live-badge" id="mod-gas">–</span>
                         <span class="comp-pin-label">ADC (34)</span>
                     </div>
 
-                    <!-- DHT22 -->
-                    <div class="comp comp-sensor top-right" id="comp-dht22">
+                    <div class="comp comp-sensor pos-r1-c4" id="comp-dht22">
                         <i class="fa-solid fa-temperature-half"></i>
                         <span class="comp-name">DHT22</span>
                         <span class="live-badge" id="mod-temp">–</span>
                         <span class="comp-pin-label">GPIO (4)</span>
                     </div>
 
-                    <!-- ABD Sensor -->
-                    <div class="comp comp-sensor left-mid" id="comp-abd">
+                    <!-- ROW 2: Logic & Positioning -->
+                    <div class="comp comp-sensor pos-r2-c1" id="comp-abd">
                         <i class="fa-solid fa-skull-crossbones"></i>
                         <span class="comp-name">ABD</span>
                         <span class="live-badge" id="mod-abd">–</span>
                         <span class="comp-pin-label">ADC (35)</span>
                     </div>
 
-                    <!-- GPS -->
-                    <div class="comp comp-sensor right-mid" id="comp-gps">
+                    <div class="comp comp-sensor pos-r2-c4" id="comp-gps">
                         <i class="fa-solid fa-location-dot"></i>
                         <span class="comp-name">GPS NEO-6M</span>
                         <span class="live-badge" id="mod-gps">12.97, 77.59</span>
                         <span class="comp-pin-label">UART (16,17)</span>
                     </div>
 
-                    <!-- ESP8266 WiFi -->
-                    <div class="comp comp-comm bottom-left" id="comp-wifi">
+                    <!-- ROW 3: Connectivity & Actuators -->
+                    <div class="comp comp-comm pos-r3-c1" id="comp-wifi">
                         <i class="fa-solid fa-wifi"></i>
                         <span class="comp-name">ESP8266</span>
                         <span class="live-badge" id="mod-wifi">–</span>
                         <span class="comp-pin-label">UART</span>
                     </div>
 
-                    <!-- SIM900 GSM -->
-                    <div class="comp comp-comm bottom-mid" id="comp-gsm">
-                        <i class="fa-solid fa-tower-broadcast"></i>
-                        <span class="comp-name">SIM900A</span>
-                        <span class="live-badge" id="mod-gsm">Standby</span>
-                        <span class="comp-pin-label">UART (GSM)</span>
-                    </div>
-
-                    <!-- Power & Fan -->
-                    <div class="comp comp-power bottom-right" id="comp-power">
-                        <i class="fa-solid fa-solar-panel"></i>
-                        <span class="comp-name">Power</span>
-                        <span class="live-badge" id="mod-power">Solar 100%</span>
-                        <span class="comp-pin-label">VIN/ADC(32)</span>
-                    </div>
-
-                    <!-- Fan Actuator -->
-                    <div class="comp comp-act act-fan" id="comp-fan">
+                    <div class="comp comp-act pos-r3-c2" id="comp-fan">
                         <i class="fa-solid fa-fan"></i>
                         <span class="comp-name">Smart Fan</span>
                         <span class="live-badge" id="mod-fan-val">OFF</span>
                         <span class="comp-pin-label">PWM (18)</span>
                     </div>
 
-                    <!-- Burn Chamber -->
-                    <div class="comp comp-act act-burn" id="comp-chamber">
+                    <div class="comp comp-act pos-r3-c3" id="comp-chamber">
                         <i class="fa-solid fa-fire-burner"></i>
                         <span class="comp-name">Burn Chamber</span>
                         <span class="live-badge" id="mod-chamber-val">OFF</span>
                         <span class="comp-pin-label">GPIO (19)</span>
+                    </div>
+
+                    <div class="comp comp-power pos-r3-c4" id="comp-power">
+                        <i class="fa-solid fa-solar-panel"></i>
+                        <span class="comp-name">Power</span>
+                        <span class="live-badge" id="mod-power">Solar 100%</span>
+                        <span class="comp-pin-label">VIN/ADC(32)</span>
+                    </div>
+
+                    <!-- ROW 4: Fallback Connectivity -->
+                    <div class="comp comp-comm pos-r4-c2" id="comp-gsm">
+                        <i class="fa-solid fa-tower-broadcast"></i>
+                        <span class="comp-name">SIM900A</span>
+                        <span class="live-badge" id="mod-gsm">Standby</span>
+                        <span class="comp-pin-label">UART (GSM)</span>
                     </div>
 
                     <!-- SVG wires -->
@@ -169,7 +179,31 @@
             <div class="pane-title"><i class="fa-solid fa-chart-line"></i> Live Telemetry</div>
             <div class="pane-body telemetry-body">
 
-                <div class="tele-group-title">Air Sensors</div>
+                <div class="tele-group-title">System Diagnostics</div>
+                <div class="tele-card" id="tele-card-cpu">
+                    <i class="fa-solid fa-microchip tele-icon green"></i>
+                    <div class="tele-info">
+                        <div class="tele-label">CPU Load</div>
+                        <div class="tele-value" id="tele-cpu">2.4%</div>
+                    </div>
+                    <div class="tele-bar-wrap"><div class="tele-bar" id="bar-cpu"></div></div>
+                </div>
+                <div class="tele-card" id="tele-card-heap">
+                    <i class="fa-solid fa-memory tele-icon blue"></i>
+                    <div class="tele-info">
+                        <div class="tele-label">Heap Memory (Free)</div>
+                        <div class="tele-value" id="tele-heap">244 KB</div>
+                    </div>
+                </div>
+                <div class="tele-card" id="tele-card-wdog">
+                    <i class="fa-solid fa-clock-rotate-left tele-icon yellow"></i>
+                    <div class="tele-info">
+                        <div class="tele-label">Watchdog Timer</div>
+                        <div class="tele-value" id="tele-wdog">KICKED ✓</div>
+                    </div>
+                </div>
+
+                <div class="tele-group-title">Air Quality Sensors</div>
                 <div class="tele-card" id="tele-card-pm25">
                     <i class="fa-solid fa-wind tele-icon blue"></i>
                     <div class="tele-info">
@@ -177,6 +211,14 @@
                         <div class="tele-value" id="tele-pm25">&ndash;</div>
                     </div>
                     <div class="tele-bar-wrap"><div class="tele-bar" id="bar-pm25"></div></div>
+                </div>
+                <div class="tele-card" id="tele-card-pms">
+                    <i class="fa-solid fa-microchip tele-icon blue"></i>
+                    <div class="tele-info">
+                        <div class="tele-label">Pms5003 &ndash; PM2.5</div>
+                        <div class="tele-value" id="tele-pms">&ndash;</div>
+                    </div>
+                    <div class="tele-bar-wrap"><div class="tele-bar" id="bar-pms"></div></div>
                 </div>
                 <div class="tele-card" id="tele-card-gas">
                     <i class="fa-solid fa-smog tele-icon yellow"></i>
@@ -193,6 +235,15 @@
                         <div class="tele-value" id="tele-temp">&ndash;</div>
                     </div>
                 </div>
+
+                <div class="tele-group-title">Positioning &amp; Safety</div>
+                <div class="tele-card" id="tele-card-gps">
+                    <i class="fa-solid fa-location-dot tele-icon green"></i>
+                    <div class="tele-info">
+                        <div class="tele-label">GPS NEO-6M</div>
+                        <div class="tele-value" id="tele-gps">12.9716, 77.5946</div>
+                    </div>
+                </div>
                 <div class="tele-card" id="tele-card-abd">
                     <i class="fa-solid fa-skull-crossbones tele-icon red"></i>
                     <div class="tele-info">
@@ -202,16 +253,7 @@
                     <div class="tele-bar-wrap"><div class="tele-bar red-bar" id="bar-abd"></div></div>
                 </div>
 
-                <div class="tele-group-title">Connectivity</div>
-                <div class="tele-card" id="tele-card-gps">
-                    <i class="fa-solid fa-location-dot tele-icon green"></i>
-                    <div class="tele-info">
-                        <div class="tele-label">GPS NEO-6M</div>
-                        <div class="tele-value" id="tele-gps">12.9716, 77.5946</div>
-                    </div>
-                </div>
-
-                <div class="tele-group-title">Power &amp; Actuators</div>
+                <div class="tele-group-title">Connectivity &amp; Power</div>
                 <div class="tele-card" id="tele-card-power">
                     <i class="fa-solid fa-solar-panel tele-icon yellow"></i>
                     <div class="tele-info">
@@ -220,6 +262,8 @@
                     </div>
                     <div class="tele-bar-wrap"><div class="tele-bar green-bar" id="bar-battery"></div></div>
                 </div>
+
+                <div class="tele-group-title">Actuators</div>
                 <div class="tele-card actuator" id="tele-card-fan">
                     <i class="fa-solid fa-fan tele-icon blue"></i>
                     <div class="tele-info">

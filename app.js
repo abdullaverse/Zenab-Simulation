@@ -1,91 +1,91 @@
+window.onload = function() {
 const cCodeTemplate = `// ==========================================
 // FILE: main.c
-// ZENAB AI Outdoor Air Purification
-// IoT Digital Twin Firmware
 // ==========================================
-#include <WiFi.h>
-#include <PubSubClient.h>
-#include "sensor_manager.h"
-#include "communication.h"
+#include <FreeRTOS.h>
+#include <task.h>
+#include "pms5003.h"
+#include "sps30.h"
+#include "mq135.h"
+#include "dht22.h"
 #include "gps_module.h"
-#include "power_system.h"
-#include "control_logic.h"
-#include "cloud_sync.h"
+
+// Task Handles
+TaskHandle_t xSensorTask = NULL;
+TaskHandle_t xCloudTask = NULL;
 
 void setup() {
     Serial.begin(115200);
-    initPowerSystem();
-    initializeSensors();
-    connectWiFi();
-    initGPS();
-    Serial.println("ZENAB SYSTEM ONLINE");
-}
-
-void loop() {
-    readAllSensorsEvery1Sec();
-    calculateAQI();
-    runControlLogic();
-    transmitDataCloud();
-    delay(1000); 
-}
-
-// ==========================================
-// FILE: control_logic.c
-// ==========================================
-#include "control_logic.h"
-#include "sensor_manager.h"
-#include "communication.h"
-
-#define FAN_PIN 18
-#define HEATER_PIN 19
-#define BUZZER_PIN 21
-
-void runControlLogic() {
-    if (currentData.pm25 > 100) {
-        increaseFanSpeed(); 
-    }
+    initSystem();
     
-    // ABD toxic gas check
-    if (currentData.abdTriggered) {
-        activateBurnChamber();
-        sendEmergencyAlert();
-    }
+    // Create Real-time Tasks
+    xTaskCreate(vSensorTask, "SensorTask", 4096, NULL, 2, &xSensorTask);
+    xTaskCreate(vCloudTask,  "CloudTask",  8192, NULL, 1, &xCloudTask);
+    
+    Serial.println("ZENAB RTOS CORE ONLINE");
+}
 
-    // APS pollution pattern optimization
-    if (currentData.apsPatternDetected) {
-        optimizeAirflow();
+// ── TASK: Sensor Acquistion (Priority 2) ──
+void vSensorTask(void *pvParameters) {
+    for(;;) {
+        pms.update();      // UART
+        sps30.read();      // I2C
+        dht22.read();      // OneWire
+        mq135.read();      // ADC
+        
+        feedWatchdog();
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+// ── TASK: Cloud Transmission (Priority 1) ──
+void vCloudTask(void *pvParameters) {
+    for(;;) {
+        if (WiFi.status() == WL_CONNECTED) {
+            serializeJSON();
+            mqtt.publish("zenab/telemetry", jsonBuffer);
+        }
+        vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
 
 // ==========================================
-// FILE: sensor_manager.c
+// FILE: drv_pms5003.c (UART)
 // ==========================================
-// Implements SPS30, MQ135, DHT22, ABD, APS
-// ...
+#include "pms5003.h"
+bool pms_read() {
+    byte buffer[32];
+    if (Serial2.available() >= 32) {
+        Serial2.readBytes(buffer, 32);
+        // Frame validation (0x42, 0x4D)
+        if (buffer[0] == 0x42 && buffer[1] == 0x4D) {
+            uint16_t pm25 = (buffer[6] << 8) | buffer[7];
+            currentData.pm25 = pm25;
+            return true;
+        }
+    }
+    return false;
+}
 
 // ==========================================
-// FILE: communication.c
+// FILE: drv_sps30.c (I2C)
 // ==========================================
-// Handles fallback logic: WiFi -> GSM -> BLE
-// ...
+#include <Wire.h>
+void sps30_init() {
+    Wire.beginTransmission(0x69);
+    Wire.write(0x00); // Start measurement
+    Wire.endTransmission();
+}
 
 // ==========================================
-// FILE: cloud_sync.c
+// FILE: drv_mq135.c (ADC)
 // ==========================================
-// Transmits JSON to HTTP/MQTT endpoints
-// ...
-
-// ==========================================
-// FILE: gps_module.c
-// ==========================================
-// Interacts with NEO-6M to fetch coords
-// ...
-
-// ==========================================
-// FILE: power_system.c
-// ==========================================
-// Simulates Solar + Battery state
-// ...
+float get_ppm() {
+    int raw = analogRead(34);
+    float volt = (raw / 4095.0) * 3.3;
+    float rs = ((3.3 - volt) / volt) * 10; // Rl=10k
+    return pow(10, (log10(rs/Ro) - b) / m);
+}
 `;
 
 // Initialize CodeMirror Editor
@@ -105,6 +105,42 @@ const envMode = document.getElementById('env-mode');
 const apiUrlInput = document.getElementById('api-url');
 const terminal = document.getElementById('terminal-output');
 const cloudStatusText = document.getElementById('cloud-status-text');
+const currentFileHeader = document.getElementById('current-filename');
+const btnSaveCode = document.getElementById('btn-save-code');
+const saveIndicator = document.getElementById('save-indicator');
+
+// Virtual File System (Hardware Drivers)
+let currentFileId = 'main';
+const virtualFS = {
+    'main': cCodeTemplate,
+    'comp-sps30': `// SPS30 I2C Driver\n#include <Wire.h>\nvoid readSPS30() {\n  Wire.beginTransmission(0x69);\n  // Read PM2.5 data...\n  Wire.endTransmission();\n}`,
+    'comp-pms5003': `// PMS5003 UART Driver\nvoid readPMS5003() {\n  if(Serial2.available() >= 32) {\n    // Parse packet...\n  }\n}`,
+    'comp-mq135': `// MQ135 ADC Driver\nvoid readMQ135() {\n  int val = analogRead(34);\n  float ppm = calculatePPM(val);\n}`,
+    'comp-dht22': `// DHT22 OneWire Driver\nvoid readDHT22() {\n  float temp = dht.readTemperature();\n  float hum = dht.readHumidity();\n}`,
+    'comp-gps': `// GPS NEO-6M Driver\nvoid readGPS() {\n  while(Serial1.available()) {\n    gps.encode(Serial1.read());\n  }\n}`,
+    'comp-abd': `// ABD Toxic Sensor\nvoid checkABD() {\n  if(analogRead(35) > threshold) {\n    triggerAlarm();\n  }\n}`,
+    'comp-esp32': `// System Core (ESP32)\nvoid initSystem() {\n  setupWiFi();\n  startRTOS();\n}`,
+    'comp-wifi': `// WiFi Stack\nvoid connectWiFi() {\n  WiFi.begin(SSID, PASS);\n}`,
+    'comp-fan': `// Smart Fan PWM Control\nvoid setFan(int speed) {\n  ledcWrite(0, speed);\n}`,
+    'comp-chamber': `// Burn Chamber Control\nvoid toggleChamber(bool on) {\n  digitalWrite(19, on ? HIGH : LOW);\n}`,
+    'comp-power': `// Power Management\nvoid readBattery() {\n  float v = analogRead(32) * (3.3/4095.0) * 2;\n}`
+};
+
+// File extensions mapping
+const fileNames = {
+    'main': 'main.c',
+    'comp-sps30': 'drv_sps30.c',
+    'comp-pms5003': 'drv_pms5003.c',
+    'comp-mq135': 'drv_mq135.c',
+    'comp-dht22': 'drv_dht22.c',
+    'comp-gps': 'drv_gps.c',
+    'comp-abd': 'drv_abd.c',
+    'comp-esp32': 'system_core.c',
+    'comp-wifi': 'comm_wifi.c',
+    'comp-fan': 'act_fan.c',
+    'comp-chamber': 'act_chamber.c',
+    'comp-power': 'pow_mgmt.c'
+};
 
 // IDE Simulation State
 let isRunning = false;
@@ -122,8 +158,12 @@ let state = {
     burnChamber: false,
     powerSource: 'solar',
     batteryPct: 100,
+    pms25: 12,
     lat: 12.9716,
-    lon: 77.5946
+    lon: 77.5946,
+    cpuLoad: 2.5,
+    heapFree: 244,
+    wdogKicked: true
 };
 
 // Mode specific baseline parameters
@@ -166,12 +206,14 @@ function updateUI() {
     setV('mod-gas',  gasStr);
     setV('mod-temp', tempStr);
     setV('mod-abd',  abdStr);
+    setV('mod-pms5003', `${state.pms25.toFixed(1)} µg/m³`);
     setV('mod-power', powerStr);
     setV('mod-wifi', '📡 TX');
     setV('mod-gsm',  state.burnChamber ? '⚠ Alert' : 'Standby');
     // Telemetry pane values
     setV('tele-pm25',  pm25Str);
     setV('tele-gas',   gasStr);
+    setV('tele-pms',   `${state.pms25.toFixed(1)} µg/m³`);
     setV('tele-temp',  tempStr);
     setV('tele-abd',   state.abdLevel > 50 ? '⚠ TOXIC DETECTED' : 'Safe');
     setV('tele-power', powerStr);
@@ -179,38 +221,50 @@ function updateUI() {
     setV('tele-burn',  state.burnChamber ? '🔥 ACTIVE' : 'OFF');
     setV('tele-gps',   `${state.lat.toFixed(4)}, ${state.lon.toFixed(4)}`);
 
+    // System Diagnostics
+    setV('tele-cpu',   `${state.cpuLoad.toFixed(1)}%`);
+    setV('tele-heap',  `${state.heapFree} KB`);
+    setV('tele-wdog',  state.wdogKicked ? 'KICKED ✓' : '⚠ STALE');
+
     // Progress bars
     const bar = (id, pct) => { const el = document.getElementById(id); if (el) el.style.setProperty('--fill', Math.min(100, pct) + '%'); };
     bar('bar-pm25',   (state.pm25 / 300) * 100);
     bar('bar-gas',    (state.abdLevel / 100) * 100);
+    bar('bar-pms',    (state.pms25 / 300) * 100);
     bar('bar-abd',    (state.abdLevel / 100) * 100);
     bar('bar-battery', state.batteryPct);
+    bar('bar-cpu',     state.cpuLoad);
 
     // Fan circuit board card
     const fanCard = document.getElementById('comp-fan');
     const fanVal  = document.getElementById('mod-fan-val');
     if (fanCard && fanVal) {
-        if (state.fanSpeed > 50) { fanCard.className = 'comp comp-act act-fan comp-active fan-fast'; fanVal.textContent = 'HIGH'; }
-        else if (state.fanSpeed > 0) { fanCard.className = 'comp comp-act act-fan comp-active fan-slow'; fanVal.textContent = 'LOW'; }
-        else { fanCard.className = 'comp comp-act act-fan'; fanVal.textContent = 'OFF'; }
+        fanCard.classList.remove('comp-active', 'fan-fast', 'fan-slow');
+        if (state.fanSpeed > 50) {
+            fanCard.classList.add('comp-active', 'fan-fast');
+            fanVal.textContent = 'HIGH';
+        } else if (state.fanSpeed > 0) {
+            fanCard.classList.add('comp-active', 'fan-slow');
+            fanVal.textContent = 'LOW';
+        } else {
+            fanVal.textContent = 'OFF';
+        }
     }
 
     // Burn Chamber circuit board card
     const burnCard = document.getElementById('comp-chamber');
     const burnVal  = document.getElementById('mod-chamber-val');
     if (burnCard && burnVal) {
-        burnCard.className = state.burnChamber ? 'comp comp-act act-burn comp-alarm' : 'comp comp-act act-burn';
+        burnCard.classList.toggle('comp-alarm', state.burnChamber);
         burnVal.textContent = state.burnChamber ? '🔥 ACTIVE' : 'OFF';
     }
 
     // ABD board alarm highlight
     const abdCard = document.getElementById('tele-card-abd');
-    if (abdCard) abdCard.className = state.abdLevel > 50 ? 'tele-card alarm' : 'tele-card';
+    if (abdCard) abdCard.classList.toggle('alarm', state.abdLevel > 50);
     const abdBoardCard = document.getElementById('comp-abd');
     if (abdBoardCard) {
-        abdBoardCard.className = state.abdLevel > 50
-            ? 'comp comp-sensor left-mid comp-alarm'
-            : 'comp comp-sensor left-mid';
+        abdBoardCard.classList.toggle('comp-alarm', state.abdLevel > 50);
     }
 }
 
@@ -220,6 +274,7 @@ function tickSimulation() {
     
     // Realistic Noise Injection
     state.pm25 += (Math.random() - 0.5) * 5 + (config.pm25Base - state.pm25) * 0.1;
+    state.pms25 += (Math.random() - 0.5) * 4 + (config.pm25Base - state.pms25) * 0.12; // Pms5003 variation
     state.aqi = Math.max(0, Math.round(state.pm25 * 1.5 + (Math.random() * 10 - 5)));
     state.temp = 25 + config.tempMod + (Math.random() * 2 - 1);
     state.abdLevel += (config.toxBase - state.abdLevel) * 0.2 + (Math.random() * 5);
@@ -245,6 +300,16 @@ function tickSimulation() {
 
     updateUI();
 
+    // System Simulation Logic
+    state.cpuLoad = 2.0 + (Math.random() * 5); // OS Idle Load
+    if (cloudSyncCounter === 0) { // Spike during Cloud Sync
+        state.cpuLoad += 45 + (Math.random() * 20);
+        state.heapFree -= (Math.random() * 10); // JSON buffering
+    } else {
+        state.heapFree += (244 - state.heapFree) * 0.1; // "GC" cleanup
+    }
+    state.wdogKicked = true; // Auto-kick for now
+
     cloudSyncCounter++;
     if (cloudSyncCounter >= 5) {
         transmitData();
@@ -259,7 +324,7 @@ const wireColors = {
     'comp-gps':   '#d29922', 'comp-wifi':  '#d29922',
     'comp-gsm':   '#d29922', 'comp-power': '#3fb950',
     'comp-fan':   '#4a90d9', 'comp-chamber': '#f85149',
-    'comp-lcd':   '#a5d6ff'
+    'comp-lcd':   '#a5d6ff', 'comp-pms5003': '#58a6ff'
 };
 
 function drawWires() {
@@ -277,7 +342,7 @@ function drawWires() {
 
     const targets = ['comp-lcd','comp-sps30','comp-mq135','comp-dht22',
                      'comp-abd','comp-gps','comp-wifi','comp-gsm',
-                     'comp-power','comp-fan','comp-chamber'];
+                     'comp-power','comp-fan','comp-chamber', 'comp-pms5003'];
 
     targets.forEach(id => {
         const el = document.getElementById(id);
@@ -312,6 +377,7 @@ async function transmitData() {
     const payload = {
         device: "ZENAB_TREE_01",
         pm25: Number(state.pm25.toFixed(2)),
+        pm25_pms: Number(state.pms25.toFixed(2)),
         aqi: state.aqi,
         temperature: Number(state.temp.toFixed(2)),
         humidity: Number(state.humidity.toFixed(2)),
@@ -399,6 +465,7 @@ btnReset.addEventListener('click', () => {
     clearInterval(simInterval);
     const config = envConfigs[envMode.value];
     state.pm25 = config.pm25Base;
+    state.pms25 = config.pm25Base;
     state.aqi = config.aqiBase;
     state.abdLevel = config.toxBase;
     state.fanSpeed = 0;
@@ -412,6 +479,7 @@ btnReset.addEventListener('click', () => {
     document.getElementById('mod-gas').textContent = '–';
     document.getElementById('mod-temp').textContent = '–';
     document.getElementById('mod-abd').textContent = '–';
+    document.getElementById('mod-pms5003').textContent = '–';
     document.getElementById('mod-fan-val').textContent = 'OFF';
     document.getElementById('mod-chamber-val').textContent = 'OFF';
     document.getElementById('mod-power').textContent = 'Solar 100%';
@@ -457,5 +525,56 @@ envMode.addEventListener('change', () => {
     }
 });
 
+// Per-Component Code Selection Logic
+function switchFile(id) {
+    // 1. Save current content
+    virtualFS[currentFileId] = editor.getValue();
+    
+    // 2. Update Selection UI
+    document.querySelectorAll('.comp').forEach(c => c.classList.remove('comp-selected'));
+    const selectedComp = document.getElementById(id);
+    if (selectedComp) selectedComp.classList.add('comp-selected');
+    
+    // 3. Load next content
+    currentFileId = id;
+    currentFileHeader.textContent = fileNames[id] || 'unknown.c';
+    editor.setValue(virtualFS[id] || `// Driver for ${id}\nvoid init() {\n\n}`);
+    
+    logSerial(`Switched to: ${fileNames[id]}`, 'idx');
+}
+
+// Global Save Logic
+function saveCode() {
+    virtualFS[currentFileId] = editor.getValue();
+    saveIndicator.textContent = 'Saving...';
+    saveIndicator.className = 'save-indicator working';
+    
+    setTimeout(() => {
+        saveIndicator.textContent = 'Hardware Updated ✓';
+        saveIndicator.className = 'save-indicator success';
+        logSerial(`FIRMWARE UPDATED: ${fileNames[currentFileId]} flashed to device.`, 'ok');
+        
+        // Brief spike in CPU load for "flashing"
+        state.cpuLoad += 30;
+        updateUI();
+
+        setTimeout(() => {
+            saveIndicator.textContent = 'Ready';
+            saveIndicator.className = 'save-indicator';
+        }, 3000);
+    }, 800);
+}
+
+// Add click listeners to canvas components
+document.querySelectorAll('.comp').forEach(comp => {
+    comp.addEventListener('click', () => {
+        switchFile(comp.id);
+    });
+});
+
+btnSaveCode.addEventListener('click', saveCode);
+
 // Starting routine
 updateUI();
+switchFile('main'); // Initial load
+};
