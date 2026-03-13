@@ -19,6 +19,7 @@
             <span>ZENAB AI &mdash; IoT Digital Twin</span>
         </div>
         <div class="topbar-controls">
+            <a href="components.html" class="tb-btn" style="background: var(--surface2); text-decoration: none;"><i class="fa-solid fa-layer-group"></i> Component Gallery</a>
             <button id="btn-run"   class="tb-btn run">  <i class="fa-solid fa-play"></i>   Run</button>
             <button id="btn-pause" class="tb-btn pause"><i class="fa-solid fa-pause"></i>  Pause</button>
             <button id="btn-reset" class="tb-btn reset"><i class="fa-solid fa-rotate-right"></i> Reset</button>
@@ -69,6 +70,7 @@
 
                     <!-- Arduino UNO Centre -->
                     <div class="comp comp-mcu" id="comp-esp32">
+                        <button class="comp-maximize-btn" data-comp="comp-esp32" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
                         <div class="comp-inner">
                             <div class="comp-led" id="esp-led"></div>
                             <span class="comp-name">Arduino UNO</span>
@@ -86,8 +88,37 @@
                         <span class="comp-pin-label">I2C (21,22)</span>
                     </div>
 
+                    <!-- Filtration Flow Strip -->
+                    <div class="filtration-flow" id="filtration-flow">
+                        <div class="filter-stage" id="fstage-1">
+                            <i class="fa-solid fa-rotate"></i>
+                            <span>Cyclonic</span>
+                        </div>
+                        <div class="filter-stage-arrow">→</div>
+                        <div class="filter-stage" id="fstage-2">
+                            <i class="fa-solid fa-filter"></i>
+                            <span>HEPA</span>
+                        </div>
+                        <div class="filter-stage-arrow">→</div>
+                        <div class="filter-stage" id="fstage-3">
+                            <i class="fa-solid fa-bolt"></i>
+                            <span>Electrostatic</span>
+                        </div>
+                        <div class="filter-stage-arrow">→</div>
+                        <div class="filter-stage" id="fstage-4">
+                            <i class="fa-solid fa-flask"></i>
+                            <span>Carbon</span>
+                        </div>
+                        <div class="filter-stage-arrow">→</div>
+                        <div class="filter-stage" id="fstage-5">
+                            <i class="fa-solid fa-shield-halved"></i>
+                            <span>APS Out</span>
+                        </div>
+                    </div>
+
                     <!-- ROW 1: Air Quality Sensors -->
                     <div class="comp comp-sensor pos-r1-c1" id="comp-sps30">
+                        <button class="comp-maximize-btn" data-comp="comp-sps30" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
                         <i class="fa-solid fa-wind"></i>
                         <span class="comp-name">SPS30</span>
                         <span class="live-badge" id="mod-pm25">–</span>
@@ -95,6 +126,7 @@
                     </div>
 
                     <div class="comp comp-sensor pos-r1-c2" id="comp-pms5003">
+                        <button class="comp-maximize-btn" data-comp="comp-pms5003" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
                         <i class="fa-solid fa-microchip"></i>
                         <span class="comp-name">Pms5003</span>
                         <span class="live-badge" id="mod-pms5003">–</span>
@@ -102,6 +134,7 @@
                     </div>
 
                     <div class="comp comp-sensor pos-r1-c3" id="comp-mq135">
+                        <button class="comp-maximize-btn" data-comp="comp-mq135" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
                         <i class="fa-solid fa-smog"></i>
                         <span class="comp-name">MQ135</span>
                         <span class="live-badge" id="mod-gas">–</span>
@@ -109,6 +142,7 @@
                     </div>
 
                     <div class="comp comp-sensor pos-r1-c4" id="comp-dht22">
+                        <button class="comp-maximize-btn" data-comp="comp-dht22" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
                         <i class="fa-solid fa-temperature-half"></i>
                         <span class="comp-name">DHT22</span>
                         <span class="live-badge" id="mod-temp">–</span>
@@ -116,7 +150,18 @@
                     </div>
 
                     <!-- ROW 2: Logic & Positioning -->
+                    <!-- APS Sensor - right of center -->
+                    <div class="comp comp-aps pos-r2-c3" id="comp-aps">
+                        <button class="comp-maximize-btn" data-comp="comp-aps" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+                        <i class="fa-solid fa-lungs"></i>
+                        <span class="comp-name">APS</span>
+                        <span class="live-badge aps-badge" id="mod-aps-status">–</span>
+                        <span class="live-badge" id="mod-aps-eff" style="margin-top:2px;">–</span>
+                        <span class="comp-pin-label">I2C/ADC (A0,A1)</span>
+                    </div>
+
                     <div class="comp comp-sensor pos-r2-c1" id="comp-abd">
+                        <button class="comp-maximize-btn" data-comp="comp-abd" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
                         <i class="fa-solid fa-skull-crossbones"></i>
                         <span class="comp-name">ABD</span>
                         <span class="live-badge" id="mod-abd">–</span>
@@ -124,6 +169,7 @@
                     </div>
 
                     <div class="comp comp-sensor pos-r2-c4" id="comp-gps">
+                        <button class="comp-maximize-btn" data-comp="comp-gps" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
                         <i class="fa-solid fa-location-dot"></i>
                         <span class="comp-name">GPS NEO-6M</span>
                         <span class="live-badge" id="mod-gps">12.97, 77.59</span>
@@ -132,6 +178,7 @@
 
                     <!-- ROW 3: Connectivity & Actuators -->
                     <div class="comp comp-comm pos-r3-c1" id="comp-wifi">
+                        <button class="comp-maximize-btn" data-comp="comp-wifi" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
                         <i class="fa-solid fa-wifi"></i>
                         <span class="comp-name">ESP8266</span>
                         <span class="live-badge" id="mod-wifi">–</span>
@@ -139,6 +186,7 @@
                     </div>
 
                     <div class="comp comp-act pos-r3-c2" id="comp-fan">
+                        <button class="comp-maximize-btn" data-comp="comp-fan" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
                         <i class="fa-solid fa-fan"></i>
                         <span class="comp-name">Smart Fan</span>
                         <span class="live-badge" id="mod-fan-val">OFF</span>
@@ -146,6 +194,7 @@
                     </div>
 
                     <div class="comp comp-act pos-r3-c3" id="comp-chamber">
+                        <button class="comp-maximize-btn" data-comp="comp-chamber" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
                         <i class="fa-solid fa-fire-burner"></i>
                         <span class="comp-name">Burn Chamber</span>
                         <span class="live-badge" id="mod-chamber-val">OFF</span>
@@ -153,6 +202,7 @@
                     </div>
 
                     <div class="comp comp-power pos-r3-c4" id="comp-power">
+                        <button class="comp-maximize-btn" data-comp="comp-power" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
                         <i class="fa-solid fa-solar-panel"></i>
                         <span class="comp-name">Power</span>
                         <span class="live-badge" id="mod-power">Solar 100%</span>
@@ -161,6 +211,7 @@
 
                     <!-- ROW 4: Fallback Connectivity -->
                     <div class="comp comp-comm pos-r4-c2" id="comp-gsm">
+                        <button class="comp-maximize-btn" data-comp="comp-gsm" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
                         <i class="fa-solid fa-tower-broadcast"></i>
                         <span class="comp-name">SIM900A</span>
                         <span class="live-badge" id="mod-gsm">Standby</span>
@@ -253,6 +304,39 @@
                     <div class="tele-bar-wrap"><div class="tele-bar red-bar" id="bar-abd"></div></div>
                 </div>
 
+                <div class="tele-group-title">APS Purification Output</div>
+                <div class="tele-card" id="tele-card-aps-pm">
+                    <i class="fa-solid fa-wind tele-icon" id="tele-icon-aps-pm" style="color:#00d4ff"></i>
+                    <div class="tele-info">
+                        <div class="tele-label">APS – PM2.5 Output</div>
+                        <div class="tele-value" id="tele-aps-pm">&ndash;</div>
+                    </div>
+                    <div class="tele-bar-wrap"><div class="tele-bar cyan-bar" id="bar-aps-pm"></div></div>
+                </div>
+                <div class="tele-card" id="tele-card-aps-gas">
+                    <i class="fa-solid fa-smog tele-icon" style="color:#00d4ff"></i>
+                    <div class="tele-info">
+                        <div class="tele-label">APS – VOC / Gas Level</div>
+                        <div class="tele-value" id="tele-aps-gas">&ndash;</div>
+                    </div>
+                </div>
+                <div class="tele-card" id="tele-card-aps-eff">
+                    <i class="fa-solid fa-gauge-high tele-icon" style="color:#00d4ff"></i>
+                    <div class="tele-info">
+                        <div class="tele-label">Purification Efficiency</div>
+                        <div class="tele-value" id="tele-aps-eff">&ndash;</div>
+                    </div>
+                    <div class="tele-bar-wrap"><div class="tele-bar cyan-bar" id="bar-aps-eff"></div></div>
+                </div>
+                <div class="tele-card" id="tele-card-aps-status">
+                    <i class="fa-solid fa-shield-halved tele-icon" id="tele-icon-aps-status" style="color:#00d4ff"></i>
+                    <div class="tele-info">
+                        <div class="tele-label">Air Quality Status</div>
+                        <div class="tele-value" id="tele-aps-status">&ndash;</div>
+                    </div>
+                    <span class="aps-status-badge" id="aps-status-badge">–</span>
+                </div>
+
                 <div class="tele-group-title">Connectivity &amp; Power</div>
                 <div class="tele-card" id="tele-card-power">
                     <i class="fa-solid fa-solar-panel tele-icon yellow"></i>
@@ -301,6 +385,23 @@
 
     </div><!-- /workspace -->
 </div><!-- /ide-root -->
+
+<!-- ── COMPONENT MAXIMIZE MODAL ── -->
+<div class="modal-overlay" id="comp-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-comp-title">
+    <div class="modal-content" id="comp-modal-content">
+        <div class="modal-header">
+            <div class="modal-title-wrap">
+                <i class="modal-comp-icon" id="modal-comp-icon"></i>
+                <span class="modal-comp-title" id="modal-comp-title">Component</span>
+                <span class="modal-pin-label" id="modal-pin-label"></span>
+            </div>
+            <button class="modal-close-btn" id="modal-close-btn" title="Close (ESC)"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body" id="modal-body">
+            <!-- Populated dynamically by JS -->
+        </div>
+    </div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/clike/clike.min.js"></script>

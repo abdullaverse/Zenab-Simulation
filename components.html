@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZENAB AI – Component Gallery</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .gallery-root {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background: var(--bg);
+            overflow: hidden;
+        }
+        .gallery-header {
+            padding: 12px 30px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+        }
+        .gallery-main {
+            flex: 1;
+            position: relative;
+            background: #0a0f18;
+            background-image:
+                repeating-linear-gradient(rgba(255,255,255,0.03) 0 1px, transparent 1px 40px),
+                repeating-linear-gradient(90deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 40px);
+            overflow: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .gallery-board {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            min-width: 1000px;
+            min-height: 800px;
+            transform: scale(0.9);
+            transform-origin: center;
+        }
+        
+        .back-link {
+            color: var(--blue);
+            text-decoration: none;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: opacity 0.2s;
+        }
+        .back-link:hover { opacity: 0.8; }
+        
+        #wiring-layer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body class="gallery-page">
+<div class="gallery-root">
+    <header class="gallery-header">
+        <div class="topbar-brand">
+            <i class="fa-solid fa-leaf"></i>
+            <span>ZENAB Component Gallery</span>
+        </div>
+        
+        <div class="topbar-env">
+            <i class="fa-solid fa-cloud-sun"></i>
+            <select id="env-mode" class="env-select">
+                <option value="clean">Clean Environment</option>
+                <option value="urban" selected>Urban Area</option>
+                <option value="industrial">Industrial Zone</option>
+                <option value="toxic">Hazardous Site</option>
+            </select>
+        </div>
+
+        <div class="topbar-controls">
+            <button id="btn-run" class="tb-btn run" title="Simulate All Systems"><i class="fa-solid fa-play"></i> Run All</button>
+            <button id="btn-reset" class="tb-btn reset" title="Reset Simulation"><i class="fa-solid fa-rotate-right"></i> Reset</button>
+            <a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> Back to IDE</a>
+        </div>
+    </header>
+
+    <main class="gallery-main">
+        <div class="gallery-board board" id="gallery-board">
+            
+            <!-- Arduino MCU (Centralized) -->
+            <div class="comp comp-mcu" id="comp-esp32">
+                <button class="comp-maximize-btn" data-comp="comp-esp32" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+                <div class="comp-inner">
+                    <div class="comp-led" id="esp-led"></div>
+                    <span class="comp-name">Arduino UNO</span>
+                    <span class="comp-sub">ATmega328P</span>
+                </div>
+            </div>
+
+            <!-- LCD (Top center) -->
+            <div class="comp comp-lcd" id="comp-lcd" style="top: 3%; left: 50%; transform: translateX(-50%); position: absolute; background: transparent; border: none; box-shadow: none;">
+                <div class="lcd-screen">
+                    <div class="lcd-row">AQI:<b id="lcd-aqi"> –</b> PM2.5:<b id="lcd-pm25"> –</b></div>
+                    <div class="lcd-row">O₂:<b id="lcd-o2"> –</b>% GPS:<b id="lcd-gps"> WAIT</b></div>
+                    <div class="lcd-row small">NET:<b id="lcd-net"> DISCONNECTED</b></div>
+                </div>
+            </div>
+
+            <!-- SENSORS (Arranged around MCU) -->
+            <div class="comp comp-sensor pos-r1-c1" id="comp-sps30">
+                <button class="comp-maximize-btn" data-comp="comp-sps30" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+                <i class="fa-solid fa-wind"></i>
+                <span class="comp-name">SPS30</span>
+                <span class="live-badge" id="mod-pm25">–</span>
+            </div>
+
+            <div class="comp comp-sensor pos-r1-c2" id="comp-pms5003">
+                <button class="comp-maximize-btn" data-comp="comp-pms5003" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+                <i class="fa-solid fa-microchip"></i>
+                <span class="comp-name">Pms5003</span>
+                <span class="live-badge" id="mod-pms5003">–</span>
+            </div>
+
+            <div class="comp comp-sensor pos-r1-c3" id="comp-mq135">
+                <button class="comp-maximize-btn" data-comp="comp-mq135" title="Maximize"><i class="fa-solid fa-smog"></i></button>
+                <i class="fa-solid fa-smog"></i>
+                <span class="comp-name">MQ135</span>
+                <span class="live-badge" id="mod-gas">–</span>
+            </div>
+
+            <div class="comp comp-sensor pos-r1-c4" id="comp-dht22">
+                <button class="comp-maximize-btn" data-comp="comp-dht22" title="Maximize"><i class="fa-solid fa-temperature-half"></i></button>
+                <i class="fa-solid fa-temperature-half"></i>
+                <span class="comp-name">DHT22</span>
+                <span class="live-badge" id="mod-temp">–</span>
+            </div>
+
+            <div class="comp comp-sensor pos-r2-c1" id="comp-abd">
+                <button class="comp-maximize-btn" data-comp="comp-abd" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+                <i class="fa-solid fa-skull-crossbones"></i>
+                <span class="comp-name">ABD Sensor</span>
+                <span class="live-badge" id="mod-abd">–</span>
+            </div>
+
+            <div class="comp comp-sensor pos-r2-c4" id="comp-gps">
+                <button class="comp-maximize-btn" data-comp="comp-gps" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+                <i class="fa-solid fa-location-dot"></i>
+                <span class="comp-name">GPS Module</span>
+                <span class="live-badge" id="mod-gps">WAIT</span>
+            </div>
+
+            <div class="comp comp-aps pos-r3-c1" id="comp-aps">
+                <button class="comp-maximize-btn" data-comp="comp-aps" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+                <i class="fa-solid fa-lungs"></i>
+                <span class="comp-name">APS System</span>
+                <span class="live-badge aps-badge" id="mod-aps-status">OFF</span>
+            </div>
+
+            <div class="comp comp-comm pos-r3-c2" id="comp-wifi">
+                <button class="comp-maximize-btn" data-comp="comp-wifi" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+                <i class="fa-solid fa-wifi"></i>
+                <span class="comp-name">WiFi</span>
+                <span class="live-badge" id="mod-wifi">IDLE</span>
+            </div>
+
+            <div class="comp comp-comm pos-r3-c3" id="comp-gsm">
+                <button class="comp-maximize-btn" data-comp="comp-gsm" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+                <i class="fa-solid fa-tower-broadcast"></i>
+                <span class="comp-name">GSM 900</span>
+                <span class="live-badge" id="mod-gsm">Standby</span>
+            </div>
+
+            <div class="comp comp-power pos-r3-c4" id="comp-power">
+                <button class="comp-maximize-btn" data-comp="comp-power" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+                <i class="fa-solid fa-solar-panel"></i>
+                <span class="comp-name">Lipo Power</span>
+                <span class="live-badge" id="mod-power">Solar 100%</span>
+            </div>
+
+            <div class="comp comp-act pos-r4-c2" id="comp-fan">
+                <button class="comp-maximize-btn" data-comp="comp-fan" title="Maximize"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+                <i class="fa-solid fa-fan"></i>
+                <span class="comp-name">Intake Fan</span>
+                <span class="live-badge" id="mod-fan-val">OFF</span>
+            </div>
+
+            <div class="comp comp-act pos-r4-c3" id="comp-chamber">
+                <button class="comp-maximize-btn" data-comp="comp-chamber" title="Maximize"><i class="fa-solid fa-fire-burner"></i></button>
+                <i class="fa-solid fa-fire-burner"></i>
+                <span class="comp-name">Burn Unit</span>
+                <span class="live-badge" id="mod-chamber-val">OFF</span>
+            </div>
+
+            <!-- SVG Wiring Layer -->
+            <svg id="wiring-layer"></svg>
+            
+            <!-- Hidden Elements to support app.js without crashing -->
+            <div id="terminal-output" style="display:none"></div>
+            <div id="cloud-status-text" style="display:none"></div>
+            <div id="current-filename" style="display:none"></div>
+            <div id="btn-save-code" style="display:none"></div>
+            <div id="save-indicator" style="display:none"></div>
+            <textarea id="code-editor" style="display:none"></textarea>
+            <input type="hidden" id="api-url" value="">
+        </div>
+    </main>
+
+    <!-- MAXIMIZE MODAL -->
+    <div class="modal-overlay" id="comp-modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title-wrap">
+                    <i class="modal-comp-icon" id="modal-comp-icon"></i>
+                    <span class="modal-comp-title" id="modal-comp-title">Component Detail</span>
+                    <span class="modal-pin-label" id="modal-pin-label"></span>
+                </div>
+                <button class="modal-close-btn" id="modal-close-btn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

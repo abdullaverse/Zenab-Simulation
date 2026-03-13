@@ -88,14 +88,21 @@ float get_ppm() {
 }
 `;
 
-// Initialize CodeMirror Editor
-const editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
-    mode: "text/x-csrc",
-    theme: "dracula",
-    lineNumbers: true,
-    readOnly: false // Allows user to type or modify
-});
-editor.setValue(cCodeTemplate);
+const btnSaveCode = document.getElementById('btn-save-code');
+const saveIndicator = document.getElementById('save-indicator');
+
+// Initialize CodeMirror Editor only if textarea exists
+const codeTextArea = document.getElementById('code-editor');
+let editor = null;
+if (codeTextArea) {
+    editor = CodeMirror.fromTextArea(codeTextArea, {
+        mode: "text/x-csrc",
+        theme: "dracula",
+        lineNumbers: true,
+        readOnly: false
+    });
+    editor.setValue(cCodeTemplate);
+}
 
 // DOM Elements Mapping
 const btnRun = document.getElementById('btn-run');
@@ -106,8 +113,6 @@ const apiUrlInput = document.getElementById('api-url');
 const terminal = document.getElementById('terminal-output');
 const cloudStatusText = document.getElementById('cloud-status-text');
 const currentFileHeader = document.getElementById('current-filename');
-const btnSaveCode = document.getElementById('btn-save-code');
-const saveIndicator = document.getElementById('save-indicator');
 
 // Virtual File System (Hardware Drivers)
 let currentFileId = 'main';
@@ -123,7 +128,8 @@ const virtualFS = {
     'comp-wifi': `// WiFi Stack\nvoid connectWiFi() {\n  WiFi.begin(SSID, PASS);\n}`,
     'comp-fan': `// Smart Fan PWM Control\nvoid setFan(int speed) {\n  ledcWrite(0, speed);\n}`,
     'comp-chamber': `// Burn Chamber Control\nvoid toggleChamber(bool on) {\n  digitalWrite(19, on ? HIGH : LOW);\n}`,
-    'comp-power': `// Power Management\nvoid readBattery() {\n  float v = analogRead(32) * (3.3/4095.0) * 2;\n}`
+    'comp-power': `// Power Management\nvoid readBattery() {\n  float v = analogRead(32) * (3.3/4095.0) * 2;\n}`,
+    'comp-aps': `// ==========================================\n// FILE: drv_aps.c (APS Sensor - I2C/ADC)\n// ==========================================\n#include "aps_sensor.h"\n#include "sps30.h"\n#include "mq135.h"\n\n// APS: Air Purification Sensor Driver\n// Monitors post-filtration air quality\n\nfloat aps_pm_out = 0.0f;\nfloat aps_efficiency = 0.0f;\nchar  aps_status[16] = "CLEAN AIR";\n\nfloat readPurificationEfficiency() {\n    float pm_in  = sps30.getPM25();   // Pre-filter PM (SPS30)\n    float pm_out = aps_pm_sensor.read(); // Post-filter PM\n    if (pm_in > 0.0f)\n        return (1.0f - (pm_out / pm_in)) * 100.0f;\n    return 0.0f;\n}\n\nAirStatus classifyAir(float pm_out, float gas_ppm) {\n    if (pm_out < 15.0f && gas_ppm < 50.0f) {\n        strcpy(aps_status, "CLEAN AIR");\n        return CLEAN_AIR;\n    }\n    if (pm_out < 50.0f) {\n        strcpy(aps_status, "MODERATE AIR");\n        return MODERATE_AIR;\n    }\n    // Trigger ABD thermal oxidation chamber\n    strcpy(aps_status, "HARMFUL AIR");\n    triggerABDChamber();\n    return HARMFUL_AIR;\n}\n\nvoid vAPSTask(void *pvParameters) {\n    for(;;) {\n        aps_efficiency = readPurificationEfficiency();\n        float gas_ppm  = mq135.readPPM();\n        AirStatus st   = classifyAir(aps_pm_out, gas_ppm);\n        sendTelemetry("aps", aps_efficiency, aps_pm_out, st);\n        vTaskDelay(pdMS_TO_TICKS(1000));\n    }\n}`
 };
 
 // File extensions mapping
@@ -139,7 +145,8 @@ const fileNames = {
     'comp-wifi': 'comm_wifi.c',
     'comp-fan': 'act_fan.c',
     'comp-chamber': 'act_chamber.c',
-    'comp-power': 'pow_mgmt.c'
+    'comp-power': 'pow_mgmt.c',
+    'comp-aps': 'drv_aps.c'
 };
 
 // IDE Simulation State
@@ -163,19 +170,26 @@ let state = {
     lon: 77.5946,
     cpuLoad: 2.5,
     heapFree: 244,
-    wdogKicked: true
+    wdogKicked: true,
+    // APS (Air Purification Sensor) state
+    apsEfficiency: 95,      // Purification efficiency %
+    apsPmOut: 5.0,          // PM2.5 post-filtration µg/m³
+    apsGasLevel: 'Low',     // Low / Moderate / High
+    apsStatus: 'CLEAN AIR', // CLEAN AIR / MODERATE AIR / HARMFUL AIR
+    apsStageProgress: 0     // 0-5 stages active (for filtration flow animation)
 };
 
 // Mode specific baseline parameters
 const envConfigs = {
-    clean: { pm25Base: 15, aqiBase: 40, tempMod: 0, toxBase: 0 },
-    urban: { pm25Base: 65, aqiBase: 120, tempMod: +2, toxBase: 10 },
-    industrial: { pm25Base: 150, aqiBase: 210, tempMod: +5, toxBase: 35 },
-    toxic: { pm25Base: 300, aqiBase: 400, tempMod: +10, toxBase: 90 }
+    clean:      { pm25Base: 15,  aqiBase: 40,  tempMod: 0,   toxBase: 0,  apsEffBase: 95 },
+    urban:      { pm25Base: 65,  aqiBase: 120, tempMod: +2,  toxBase: 10, apsEffBase: 76 },
+    industrial: { pm25Base: 150, aqiBase: 210, tempMod: +5,  toxBase: 35, apsEffBase: 55 },
+    toxic:      { pm25Base: 300, aqiBase: 400, tempMod: +10, toxBase: 90, apsEffBase: 28 }
 };
 
 // Logging standard console equivalent
 function logSerial(msg, type = '') {
+    if (!terminal) return;
     const div = document.createElement('div');
     div.textContent = `> ${msg}`;
     if (type) div.className = `t-${type}`;
@@ -190,9 +204,12 @@ function updateUI() {
     if (!isRunning) return;
 
     // LCD
-    document.getElementById('lcd-aqi').textContent  = state.aqi;
-    document.getElementById('lcd-pm25').textContent = state.pm25.toFixed(1);
-    document.getElementById('lcd-o2').textContent   = state.oxygen.toFixed(1);
+    const lcdAqi = document.getElementById('lcd-aqi');
+    if (lcdAqi) lcdAqi.textContent  = state.aqi;
+    const lcdPm25 = document.getElementById('lcd-pm25');
+    if (lcdPm25) lcdPm25.textContent = state.pm25.toFixed(1);
+    const lcdO2 = document.getElementById('lcd-o2');
+    if (lcdO2) lcdO2.textContent   = state.oxygen.toFixed(1);
 
     // Canvas live badges (circuit board)
     const setV = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
@@ -210,6 +227,7 @@ function updateUI() {
     setV('mod-power', powerStr);
     setV('mod-wifi', '📡 TX');
     setV('mod-gsm',  state.burnChamber ? '⚠ Alert' : 'Standby');
+    setV('mod-gps',  `${state.lat.toFixed(2)}, ${state.lon.toFixed(2)}`);
     // Telemetry pane values
     setV('tele-pm25',  pm25Str);
     setV('tele-gas',   gasStr);
@@ -268,9 +286,79 @@ function updateUI() {
     }
 }
 
+// APS Specific UI updates (called after tickSimulation APS logic)
+function updateAPSUI() {
+    if (!isRunning) return;
+    const setV = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    const bar   = (id, pct) => { const el = document.getElementById(id); if (el) el.style.setProperty('--fill', Math.min(100, Math.max(0, pct)) + '%'); };
+
+    // Determine status properties
+    const statusMap = {
+        'CLEAN AIR':    { emoji: '✅', color: '#3fb950', cls: 'aps-clean',    icon: 'green' },
+        'MODERATE AIR': { emoji: '⚠️', color: '#d29922', cls: 'aps-moderate', icon: 'yellow' },
+        'HARMFUL AIR':  { emoji: '☠️', color: '#f85149', cls: 'aps-harmful',  icon: 'red' }
+    };
+    const info = statusMap[state.apsStatus] || statusMap['CLEAN AIR'];
+
+    // Update circuit board APS component
+    const apsComp = document.getElementById('comp-aps');
+    if (apsComp) {
+        apsComp.classList.remove('aps-clean', 'aps-moderate', 'aps-harmful', 'comp-alarm');
+        apsComp.classList.add(info.cls);
+        if (state.apsStatus === 'HARMFUL AIR') apsComp.classList.add('comp-alarm');
+    }
+    setV('mod-aps-status', `${info.emoji} ${state.apsStatus}`);
+    setV('mod-aps-eff',    `Eff: ${state.apsEfficiency.toFixed(1)}%`);
+
+    // Update telemetry cards
+    setV('tele-aps-pm',  `${state.apsPmOut.toFixed(1)} µg/m³`);
+    setV('tele-aps-gas', state.apsGasLevel);
+    setV('tele-aps-eff', `${state.apsEfficiency.toFixed(1)}%`);
+    setV('tele-aps-status', state.apsStatus);
+
+    // Update progress bars
+    bar('bar-aps-pm',  (state.apsPmOut / 75) * 100);     // scale: 75 µg/m³ = 100%
+    bar('bar-aps-eff',  state.apsEfficiency);              // direct percentage
+
+    // Color-code the APS status telemetry card
+    const statusCard = document.getElementById('tele-card-aps-status');
+    if (statusCard) {
+        statusCard.classList.remove('aps-tele-clean', 'aps-tele-moderate', 'aps-tele-harmful');
+        statusCard.classList.add(`aps-tele-${info.cls.replace('aps-', '')}`);
+    }
+
+    // Update status badge
+    const badge = document.getElementById('aps-status-badge');
+    if (badge) {
+        badge.textContent = `${info.emoji} ${state.apsStatus}`;
+        badge.style.background = info.color + '22'; // 13% opacity
+        badge.style.color       = info.color;
+        badge.style.borderColor = info.color + '66';
+    }
+
+    // Filtration flow stage highlights
+    for (let i = 1; i <= 5; i++) {
+        const stage = document.getElementById(`fstage-${i}`);
+        if (stage) {
+            stage.classList.toggle('active', i <= state.apsStageProgress);
+        }
+    }
+
+    // Gas level color for APS gas card
+    const gasCard = document.getElementById('tele-card-aps-gas');
+    if (gasCard) {
+        gasCard.classList.remove('aps-tele-clean', 'aps-tele-moderate', 'aps-tele-harmful');
+        if      (state.apsGasLevel === 'Low')      gasCard.classList.add('aps-tele-clean');
+        else if (state.apsGasLevel === 'Moderate') gasCard.classList.add('aps-tele-moderate');
+        else                                       gasCard.classList.add('aps-tele-harmful');
+    }
+}
+
 // Hardware event tick emulation (runs 1Hz)
 function tickSimulation() {
-    const config = envConfigs[envMode.value];
+    const modeVal = envMode ? envMode.value : 'urban';
+    const config = envConfigs[modeVal];
+    if (!config) return;
     
     // Realistic Noise Injection
     state.pm25 += (Math.random() - 0.5) * 5 + (config.pm25Base - state.pm25) * 0.1;
@@ -300,6 +388,42 @@ function tickSimulation() {
 
     updateUI();
 
+    // ── APS Multi-Stage Purification Logic ──
+    const apsEffTarget = config.apsEffBase + (Math.random() * 6 - 3);
+    // Efficiency degrades slightly as pollution rises, recovers slowly
+    state.apsEfficiency += (apsEffTarget - state.apsEfficiency) * 0.15 + (Math.random() * 2 - 1);
+    state.apsEfficiency  = Math.max(5, Math.min(99, state.apsEfficiency));
+
+    // Post-filter PM output (what passes through all filtration stages)
+    const rawPmOut = state.pm25 * (1 - state.apsEfficiency / 100);
+    state.apsPmOut += (rawPmOut - state.apsPmOut) * 0.25 + (Math.random() * 0.8 - 0.4);
+    state.apsPmOut  = Math.max(0, state.apsPmOut);
+
+    // Gas level classification from ABD sensor
+    if      (state.abdLevel < 20)  state.apsGasLevel = 'Low';
+    else if (state.abdLevel < 55)  state.apsGasLevel = 'Moderate';
+    else                           state.apsGasLevel = 'High';
+
+    // APS Air Quality Classification
+    const prevStatus = state.apsStatus;
+    if (state.apsPmOut < 15 && state.apsGasLevel === 'Low') {
+        state.apsStatus = 'CLEAN AIR';
+    } else if (state.apsPmOut < 50 && state.apsGasLevel !== 'High') {
+        state.apsStatus = 'MODERATE AIR';
+    } else {
+        state.apsStatus = 'HARMFUL AIR';
+        // Trigger ABD thermal oxidation on HARMFUL status
+        if (!state.burnChamber && prevStatus !== 'HARMFUL AIR') {
+            logSerial('APS ALERT: HARMFUL AIR detected! Triggering ABD thermal oxidation.', 'err');
+        }
+        state.burnChamber = true;
+    }
+
+    // Filtration stage animation (progress 1-5 based on efficiency)
+    state.apsStageProgress = Math.max(1, Math.round((state.apsEfficiency / 100) * 5));
+
+    updateAPSUI();
+
     // System Simulation Logic
     state.cpuLoad = 2.0 + (Math.random() * 5); // OS Idle Load
     if (cloudSyncCounter === 0) { // Spike during Cloud Sync
@@ -324,11 +448,12 @@ const wireColors = {
     'comp-gps':   '#d29922', 'comp-wifi':  '#d29922',
     'comp-gsm':   '#d29922', 'comp-power': '#3fb950',
     'comp-fan':   '#4a90d9', 'comp-chamber': '#f85149',
-    'comp-lcd':   '#a5d6ff', 'comp-pms5003': '#58a6ff'
+    'comp-lcd':   '#a5d6ff', 'comp-pms5003': '#58a6ff',
+    'comp-aps':   '#00d4ff'
 };
 
 function drawWires() {
-    const board = document.querySelector('.board');
+    const board = document.querySelector('.board') || document.querySelector('.gallery-board');
     const svg   = document.getElementById('wiring-layer');
     if (!board || !svg) return;
     svg.innerHTML = '';
@@ -337,30 +462,36 @@ function drawWires() {
     if (!mcu) return;
     const br    = board.getBoundingClientRect();
     const mr    = mcu.getBoundingClientRect();
-    const mx    = mr.left + mr.width  / 2 - br.left;
-    const my    = mr.top  + mr.height / 2 - br.top;
+    const mx    = (mr.left + mr.width / 2) - br.left;
+    const my    = (mr.top + mr.height / 2) - br.top;
 
     const targets = ['comp-lcd','comp-sps30','comp-mq135','comp-dht22',
                      'comp-abd','comp-gps','comp-wifi','comp-gsm',
-                     'comp-power','comp-fan','comp-chamber', 'comp-pms5003'];
+                     'comp-power','comp-fan','comp-chamber', 'comp-pms5003', 'comp-aps'];
 
     targets.forEach(id => {
         const el = document.getElementById(id);
-        if (!el) return;
+        if (!el || el.offsetParent === null) return; // Skip hidden
         const er = el.getBoundingClientRect();
-        const ex = er.left + er.width  / 2 - br.left;
-        const ey = er.top  + er.height / 2 - br.top;
+        const ex = (er.left + er.width / 2) - br.left;
+        const ey = (er.top + er.height / 2) - br.top;
 
         const color = wireColors[id] || '#555';
-        const dash  = isRunning ? '' : '6,4';
-
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        
         line.setAttribute('x1', mx); line.setAttribute('y1', my);
         line.setAttribute('x2', ex); line.setAttribute('y2', ey);
         line.setAttribute('stroke', color);
-        line.setAttribute('stroke-width', '1.5');
-        line.setAttribute('stroke-opacity', '0.55');
-        if (dash) line.setAttribute('stroke-dasharray', dash);
+        line.setAttribute('stroke-width', isRunning ? '2.5' : '1.5');
+        line.setAttribute('stroke-opacity', isRunning ? '1' : '0.5');
+        
+        if (isRunning) {
+            line.setAttribute('stroke-dasharray', '5,5');
+            line.style.animation = 'dash 10s linear infinite';
+        } else {
+            line.setAttribute('stroke-dasharray', '2,4');
+        }
+        
         svg.appendChild(line);
     });
 }
@@ -385,7 +516,12 @@ async function transmitData() {
         latitude: state.lat,
         longitude: state.lon,
         power: state.powerSource,
-        status: state.burnChamber ? 'emergency' : (state.fanSpeed > 0 ? 'purifying' : 'idle')
+        status: state.burnChamber ? 'emergency' : (state.fanSpeed > 0 ? 'purifying' : 'idle'),
+        // APS telemetry data
+        aps_pm_out: Number(state.apsPmOut.toFixed(2)),
+        aps_gas_level: state.apsGasLevel,
+        aps_efficiency: Number(state.apsEfficiency.toFixed(1)),
+        aps_status: state.apsStatus
     };
 
     try {
@@ -439,62 +575,77 @@ async function transmitData() {
 }
 
 // Attach Event Observers
-btnRun.addEventListener('click', () => {
-    if (isRunning) return;
-    isRunning = true;
-    logSerial('ZENAB SYSTEM ONLINE', 'ok');
-    logSerial('WIFI CONNECTED', 'ok');
-    logSerial('GPS LOCKED', 'ok');
-    const runLed = ledEl(); if (runLed) runLed.classList.add('active');
-    document.getElementById('lcd-gps').textContent = 'ACTIVE';
-    document.getElementById('lcd-net').textContent = 'CONNECTING...';
-    drawWires();
-    simInterval = setInterval(tickSimulation, 1000);
-});
+if (btnRun) {
+    btnRun.addEventListener('click', () => {
+        if (isRunning) return;
+        isRunning = true;
+        logSerial('ZENAB SYSTEM ONLINE', 'ok');
+        logSerial('WIFI CONNECTED', 'ok');
+        logSerial('GPS LOCKED', 'ok');
+        const runLed = ledEl(); if (runLed) runLed.classList.add('active');
+        const gpsLcd = document.getElementById('lcd-gps');
+        if (gpsLcd) gpsLcd.textContent = 'ACTIVE';
+        const netLcd = document.getElementById('lcd-net');
+        if (netLcd) netLcd.textContent = 'CONNECTING...';
+        drawWires();
+        simInterval = setInterval(tickSimulation, 1000);
+    });
+}
 
-btnPause.addEventListener('click', () => {
-    isRunning = false;
-    clearInterval(simInterval);
-    logSerial('Simulation PAUSED', 'warn');
-    const pauseLed = ledEl(); if (pauseLed) pauseLed.classList.remove('active');
-    drawWires();
-});
+if (btnPause) {
+    btnPause.addEventListener('click', () => {
+        isRunning = false;
+        clearInterval(simInterval);
+        logSerial('Simulation PAUSED', 'warn');
+        const pauseLed = ledEl(); if (pauseLed) pauseLed.classList.remove('active');
+        drawWires();
+    });
+}
 
-btnReset.addEventListener('click', () => {
-    isRunning = false;
-    clearInterval(simInterval);
-    const config = envConfigs[envMode.value];
-    state.pm25 = config.pm25Base;
-    state.pms25 = config.pm25Base;
-    state.aqi = config.aqiBase;
-    state.abdLevel = config.toxBase;
-    state.fanSpeed = 0;
-    state.burnChamber = false;
-    cloudSyncCounter = 0;
-    
-    document.getElementById('lcd-aqi').textContent = '–';
-    document.getElementById('lcd-pm25').textContent = '–';
-    document.getElementById('lcd-o2').textContent = '–';
-    document.getElementById('mod-pm25').textContent = '–';
-    document.getElementById('mod-gas').textContent = '–';
-    document.getElementById('mod-temp').textContent = '–';
-    document.getElementById('mod-abd').textContent = '–';
-    document.getElementById('mod-pms5003').textContent = '–';
-    document.getElementById('mod-fan-val').textContent = 'OFF';
-    document.getElementById('mod-chamber-val').textContent = 'OFF';
-    document.getElementById('mod-power').textContent = 'Solar 100%';
-    ['bar-pm25','bar-gas','bar-abd'].forEach(id => { const el = document.getElementById(id); if(el) el.style.setProperty('--fill','5%'); });
-    document.getElementById('bar-battery').style.setProperty('--fill','100%');
+if (btnReset) {
+    btnReset.addEventListener('click', () => {
+        isRunning = false;
+        clearInterval(simInterval);
+        const config = envMode ? envConfigs[envMode.value] : envConfigs['urban'];
+        state.pm25 = config.pm25Base;
+        state.pms25 = config.pm25Base;
+        state.aqi = config.aqiBase;
+        state.abdLevel = config.toxBase;
+        state.fanSpeed = 0;
+        state.burnChamber = false;
+        cloudSyncCounter = 0;
+        
+        const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+        setVal('lcd-aqi', '–');
+        setVal('lcd-pm25', '–');
+        setVal('lcd-o2', '–');
+        setVal('mod-pm25', '–');
+        setVal('mod-gas', '–');
+        setVal('mod-temp', '–');
+        setVal('mod-abd', '–');
+        setVal('mod-pms5003', '–');
+        setVal('mod-fan-val', 'OFF');
+        setVal('mod-chamber-val', 'OFF');
+        setVal('mod-power', 'Solar 100%');
+        
+        ['bar-pm25','bar-gas','bar-abd'].forEach(id => { const el = document.getElementById(id); if(el) el.style.setProperty('--fill','5%'); });
+        const batBar = document.getElementById('bar-battery');
+        if (batBar) batBar.style.setProperty('--fill','100%');
 
-    const led = ledEl(); if (led) led.classList.remove('active');
-    document.getElementById('lcd-gps').textContent = 'WAIT';
-    document.getElementById('lcd-net').textContent = 'DISCONNECTED';
-    cloudStatusText.className = 'offline';
-    cloudStatusText.textContent = 'Offline';
-    
-    terminal.innerHTML = '<div>&gt; ZENAB IDE Initialized.</div><div>&gt; Ready for simulation.</div>';
-    drawWires();
-});
+        const led = ledEl(); if (led) led.classList.remove('active');
+        setVal('lcd-gps', 'WAIT');
+        setVal('lcd-net', 'DISCONNECTED');
+        if (cloudStatusText) {
+            cloudStatusText.className = 'offline';
+            cloudStatusText.textContent = 'Offline';
+        }
+        
+        if (terminal) {
+            terminal.innerHTML = '<div>&gt; ZENAB IDE Initialized.</div><div>&gt; Ready for simulation.</div>';
+        }
+        drawWires();
+    });
+}
 
 // Update dashboard link based on API URL
 function updateDashboardLink() {
@@ -512,21 +663,24 @@ function updateDashboardLink() {
     }
 }
 
-apiUrlInput.addEventListener('input', updateDashboardLink);
+if (apiUrlInput) apiUrlInput.addEventListener('input', updateDashboardLink);
 window.addEventListener('load', updateDashboardLink);
 
-envMode.addEventListener('change', () => {
-    logSerial(`Environment changed to: ${envMode.options[envMode.selectedIndex].text}`);
-    if (!isRunning) {
-        const config = envConfigs[envMode.value];
-        state.pm25 = config.pm25Base;
-        state.aqi = config.aqiBase;
-        updateUI();
-    }
-});
+if (envMode) {
+    envMode.addEventListener('change', () => {
+        logSerial(`Environment changed to: ${envMode.options[envMode.selectedIndex].text}`);
+        if (!isRunning) {
+            const config = envConfigs[envMode.value];
+            state.pm25 = config.pm25Base;
+            state.aqi = config.aqiBase;
+            updateUI();
+        }
+    });
+}
 
 // Per-Component Code Selection Logic
 function switchFile(id) {
+    if (!editor) return; // Skip if no editor present (gallery page)
     // 1. Save current content
     virtualFS[currentFileId] = editor.getValue();
     
@@ -566,15 +720,288 @@ function saveCode() {
 }
 
 // Add click listeners to canvas components
-document.querySelectorAll('.comp').forEach(comp => {
-    comp.addEventListener('click', () => {
-        switchFile(comp.id);
+const compRoots = document.querySelectorAll('.comp');
+if (compRoots.length > 0) {
+    compRoots.forEach(comp => {
+        comp.addEventListener('click', (e) => {
+            // Only switch file if in IDE (where editor exists)
+            if (editor) switchFile(comp.id);
+        });
     });
-});
+}
 
-btnSaveCode.addEventListener('click', saveCode);
+if (btnSaveCode) btnSaveCode.addEventListener('click', saveCode);
 
 // Starting routine
 updateUI();
-switchFile('main'); // Initial load
+if (document.getElementById('comp-esp32') && codeTextArea) {
+    switchFile('main'); // Initial load
+}
+
+// ═══════════════════════════════════════════════════════
+//  MAXIMIZE / EXPAND FEATURE
+// ═══════════════════════════════════════════════════════
+
+const modalOverlay  = document.getElementById('comp-modal-overlay');
+const modalBody     = document.getElementById('modal-body');
+const modalTitle    = document.getElementById('modal-comp-title');
+const modalIcon     = document.getElementById('modal-comp-icon');
+const modalPinLabel = document.getElementById('modal-pin-label');
+const modalCloseBtn = document.getElementById('modal-close-btn');
+
+let activeModalComp   = null;   // currently maximized component id
+let modalRefreshTimer = null;   // setInterval handle for live refresh
+
+// ── Per-component metadata & telemetry builder ──────────────────────────────
+const compMeta = {
+    'comp-esp32': {
+        title: 'Arduino UNO',
+        icon: 'fa-solid fa-microchip',
+        iconColor: '#4a90d9',
+        pin: 'ATmega328P · Core',
+        buildTelemetry: () => [
+            { label: 'CPU Load',      icon: 'fa-solid fa-gauge',       value: `${state.cpuLoad.toFixed(1)} %`,   accent: state.cpuLoad > 60 ? 'red' : 'green',  bar: state.cpuLoad,          barClass: state.cpuLoad > 60 ? 'bar-red' : 'bar-green' },
+            { label: 'Heap Free',     icon: 'fa-solid fa-memory',      value: `${state.heapFree.toFixed(0)} KB`, accent: 'blue',  bar: (state.heapFree / 244) * 100, barClass: 'bar-green' },
+            { label: 'Watchdog',      icon: 'fa-solid fa-clock-rotate-left', value: state.wdogKicked ? 'KICKED ✓' : '⚠ STALE', accent: state.wdogKicked ? 'green' : 'red' },
+            { label: 'AQI (LCD)',     icon: 'fa-solid fa-chart-line',  value: state.aqi,                          accent: state.aqi > 200 ? 'red' : state.aqi > 100 ? 'yellow' : 'green', bar: (state.aqi / 400) * 100, barClass: state.aqi > 200 ? 'bar-red' : 'bar-yellow' },
+        ]
+    },
+    'comp-sps30': {
+        title: 'SPS30 – PM Sensor',
+        icon: 'fa-solid fa-wind',
+        iconColor: '#58a6ff',
+        pin: 'I2C · Pins 21, 22',
+        buildTelemetry: () => [
+            { label: 'PM2.5',         icon: 'fa-solid fa-wind',        value: `${state.pm25.toFixed(1)} µg/m³`,  accent: state.pm25 > 100 ? 'red' : state.pm25 > 50 ? 'yellow' : 'blue', bar: (state.pm25 / 300) * 100, barClass: state.pm25 > 100 ? 'bar-red' : 'bar-yellow' },
+            { label: 'AQI (derived)', icon: 'fa-solid fa-chart-bar',   value: `${state.aqi}`,                    accent: state.aqi > 200 ? 'red' : 'blue', bar: (state.aqi / 400) * 100, barClass: 'bar-yellow' },
+        ]
+    },
+    'comp-pms5003': {
+        title: 'PMS5003 – PM Sensor',
+        icon: 'fa-solid fa-microchip',
+        iconColor: '#58a6ff',
+        pin: 'UART · Pins 27, 26',
+        buildTelemetry: () => [
+            { label: 'PM2.5 (PMS)', icon: 'fa-solid fa-wind',  value: `${state.pms25.toFixed(1)} µg/m³`, accent: state.pms25 > 100 ? 'red' : 'blue', bar: (state.pms25 / 300) * 100, barClass: 'bar-yellow' },
+        ]
+    },
+    'comp-mq135': {
+        title: 'MQ135 – Gas Sensor',
+        icon: 'fa-solid fa-smog',
+        iconColor: '#d29922',
+        pin: 'ADC · Pin 34',
+        buildTelemetry: () => {
+            const ppm = (state.abdLevel * 2.5).toFixed(0);
+            return [
+                { label: 'Gas / VOC (ppm)', icon: 'fa-solid fa-smog', value: `${ppm} ppm`, accent: state.abdLevel > 50 ? 'red' : state.abdLevel > 20 ? 'yellow' : 'green', bar: (state.abdLevel / 100) * 100, barClass: state.abdLevel > 50 ? 'bar-red' : 'bar-yellow' },
+                { label: 'APS Gas Level', icon: 'fa-solid fa-flask', value: state.apsGasLevel, accent: state.apsGasLevel === 'High' ? 'red' : state.apsGasLevel === 'Moderate' ? 'yellow' : 'green' },
+            ];
+        }
+    },
+    'comp-dht22': {
+        title: 'DHT22 – Temp / Humidity',
+        icon: 'fa-solid fa-temperature-half',
+        iconColor: '#db7b19',
+        pin: 'GPIO · Pin 4',
+        buildTelemetry: () => [
+            { label: 'Temperature', icon: 'fa-solid fa-thermometer-half', value: `${state.temp.toFixed(1)} °C`, accent: state.temp > 35 ? 'red' : 'orange' },
+            { label: 'Humidity',    icon: 'fa-solid fa-droplet',          value: `${state.humidity.toFixed(0)} %RH`, accent: 'blue' },
+        ]
+    },
+    'comp-abd': {
+        title: 'ABD – Toxic Gas Chamber',
+        icon: 'fa-solid fa-skull-crossbones',
+        iconColor: '#f85149',
+        pin: 'ADC · Pin 35',
+        buildTelemetry: () => [
+            { label: 'Toxic Level', icon: 'fa-solid fa-biohazard',  value: state.abdLevel > 50 ? '⚠ TOXIC' : 'Safe', accent: state.abdLevel > 50 ? 'red' : 'green', bar: (state.abdLevel / 100) * 100, barClass: 'bar-red' },
+            { label: 'Raw ABD',     icon: 'fa-solid fa-gauge-high', value: `${state.abdLevel.toFixed(1)}`,           accent: state.abdLevel > 50 ? 'red' : 'yellow' },
+            { label: 'Burn Chamber', icon: 'fa-solid fa-fire-burner', value: state.burnChamber ? '🔥 ACTIVE' : 'STANDBY', accent: state.burnChamber ? 'red' : 'green' },
+        ]
+    },
+    'comp-gps': {
+        title: 'GPS NEO-6M',
+        icon: 'fa-solid fa-location-dot',
+        iconColor: '#3fb950',
+        pin: 'UART · Pins 16, 17',
+        buildTelemetry: () => [
+            { label: 'Latitude',  icon: 'fa-solid fa-map-pin',        value: state.lat.toFixed(6),  accent: 'green' },
+            { label: 'Longitude', icon: 'fa-solid fa-map-pin',        value: state.lon.toFixed(6),  accent: 'green' },
+            { label: 'Fix',       icon: 'fa-solid fa-satellite-dish', value: isRunning ? 'LOCKED ✓' : '– NO FIX', accent: isRunning ? 'green' : 'yellow' },
+        ]
+    },
+    'comp-wifi': {
+        title: 'ESP8266 – WiFi Module',
+        icon: 'fa-solid fa-wifi',
+        iconColor: '#d29922',
+        pin: 'UART · SoftSerial',
+        buildTelemetry: () => [
+            { label: 'Status',    icon: 'fa-solid fa-wifi',           value: isRunning ? '📡 TX Active' : 'IDLE', accent: isRunning ? 'green' : 'yellow' },
+            { label: 'Protocol',  icon: 'fa-solid fa-tower-broadcast', value: 'MQTT / HTTP',                      accent: 'blue' },
+            { label: 'Cloud',     icon: 'fa-solid fa-cloud',          value: isRunning ? 'Transmitting' : 'Offline', accent: isRunning ? 'green' : 'red' },
+        ]
+    },
+    'comp-fan': {
+        title: 'Smart Fan – PWM Actuator',
+        icon: 'fa-solid fa-fan',
+        iconColor: '#58a6ff',
+        pin: 'PWM · Pin 18',
+        buildTelemetry: () => [
+            { label: 'Speed',    icon: 'fa-solid fa-fan',      value: state.fanSpeed > 50 ? 'HIGH (100%)' : state.fanSpeed > 0 ? 'LOW (50%)' : 'OFF', accent: state.fanSpeed > 50 ? 'blue' : state.fanSpeed > 0 ? 'yellow' : 'green' },
+            { label: 'PWM Duty', icon: 'fa-solid fa-gauge',    value: `${state.fanSpeed} %`, accent: 'blue', bar: state.fanSpeed, barClass: 'bar-green' },
+        ]
+    },
+    'comp-chamber': {
+        title: 'Burn Chamber – Actuator',
+        icon: 'fa-solid fa-fire-burner',
+        iconColor: '#f85149',
+        pin: 'GPIO · Pin 19',
+        buildTelemetry: () => [
+            { label: 'Chamber State', icon: 'fa-solid fa-fire', value: state.burnChamber ? '🔥 ACTIVE' : 'OFF', accent: state.burnChamber ? 'red' : 'green' },
+            { label: 'Triggered By',  icon: 'fa-solid fa-triangle-exclamation', value: state.burnChamber ? 'APS / ABD Alarm' : 'None', accent: state.burnChamber ? 'red' : 'green' },
+        ]
+    },
+    'comp-power': {
+        title: 'Power Management (Solar)',
+        icon: 'fa-solid fa-solar-panel',
+        iconColor: '#3fb950',
+        pin: 'VIN · ADC Pin 32',
+        buildTelemetry: () => [
+            { label: 'Source',  icon: 'fa-solid fa-solar-panel', value: state.powerSource === 'solar' ? '☀ Solar' : '🔋 Battery', accent: 'green' },
+            { label: 'Battery', icon: 'fa-solid fa-battery-full', value: `${state.batteryPct.toFixed(0)} %`, accent: state.batteryPct < 20 ? 'red' : 'green', bar: state.batteryPct, barClass: 'bar-green' },
+        ]
+    },
+    'comp-gsm': {
+        title: 'SIM900A – GSM Module',
+        icon: 'fa-solid fa-tower-broadcast',
+        iconColor: '#d29922',
+        pin: 'UART · GSM',
+        buildTelemetry: () => [
+            { label: 'Status',   icon: 'fa-solid fa-signal',    value: state.burnChamber ? '⚠ ALERT TX' : 'Standby', accent: state.burnChamber ? 'red' : 'yellow' },
+            { label: 'Fallback', icon: 'fa-solid fa-retweet',   value: 'GSM 2G Backup',                               accent: 'yellow' },
+        ]
+    },
+    'comp-aps': {
+        title: 'APS – Air Purification Sensor',
+        icon: 'fa-solid fa-lungs',
+        iconColor: '#00d4ff',
+        pin: 'I2C/ADC · A0, A1',
+        buildTelemetry: () => {
+            const statusColors = { 'CLEAN AIR': { accent: 'green', pillBg: '#3fb950', barC: 'bar-green' }, 'MODERATE AIR': { accent: 'yellow', pillBg: '#d29922', barC: 'bar-yellow' }, 'HARMFUL AIR': { accent: 'red', pillBg: '#f85149', barC: 'bar-red' } };
+            const sc = statusColors[state.apsStatus] || statusColors['CLEAN AIR'];
+            return [
+                { label: 'Air Quality Status',     icon: 'fa-solid fa-shield-halved', value: state.apsStatus,                        accent: sc.accent },
+                { label: 'Purification Efficiency',icon: 'fa-solid fa-gauge-high',    value: `${state.apsEfficiency.toFixed(1)} %`,  accent: 'cyan', bar: state.apsEfficiency, barClass: 'bar-cyan' },
+                { label: 'PM2.5 Post-Filter',      icon: 'fa-solid fa-wind',          value: `${state.apsPmOut.toFixed(1)} µg/m³`,  accent: state.apsPmOut > 50 ? 'red' : state.apsPmOut > 15 ? 'yellow' : 'cyan', bar: (state.apsPmOut / 75) * 100, barClass: sc.barC },
+                { label: 'VOC / Gas Level',        icon: 'fa-solid fa-smog',          value: state.apsGasLevel,                     accent: state.apsGasLevel === 'High' ? 'red' : state.apsGasLevel === 'Moderate' ? 'yellow' : 'green' },
+                { label: 'Filtration Stages Active', icon: 'fa-solid fa-filter',     value: `${state.apsStageProgress} / 5`,        accent: 'cyan', bar: (state.apsStageProgress / 5) * 100, barClass: 'bar-cyan' },
+            ];
+        }
+    }
 };
+
+// ── Modal renderer ──────────────────────────────────────────────────────────
+function buildModalBody(compId) {
+    const meta = compMeta[compId];
+    if (!meta) return;
+
+    const tele = meta.buildTelemetry();
+    
+    let leftColHtml = `
+        <div class="modal-tele-section-title"><i class="fa-solid fa-chart-line" style="margin-right:8px"></i>Live Diagnostic Telemetry</div>
+        <div class="modal-tele-grid">`;
+
+    tele.forEach(row => {
+        const barHtml = row.bar !== undefined
+            ? `<div class="modal-bar-wrap"><div class="modal-bar-fill ${row.barClass || ''}" style="width:${Math.min(100, Math.max(0, row.bar)).toFixed(1)}%"></div></div>`
+            : '';
+        leftColHtml += `
+            <div class="modal-tele-row accent-${row.accent || 'blue'}">
+                <div class="modal-tele-label">
+                    <i class="${row.icon}"></i>
+                    ${row.label}
+                </div>
+                <div class="modal-tele-value">${row.value}</div>
+                ${barHtml}
+            </div>`;
+    });
+    leftColHtml += `</div>`;
+
+    // Driver code snippet
+    const driverCode = (virtualFS[compId] || '').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+    let rightColHtml = `
+        <div class="modal-tele-section-title"><i class="fa-solid fa-code" style="margin-right:8px"></i>Firmware Driver Integration</div>
+        <div class="modal-code-block">${driverCode.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+        <div style="margin-top:15px; font-size: 0.75rem; color: var(--muted); background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; border: 1px solid var(--border);">
+            <i class="fa-solid fa-info-circle" style="color: var(--blue); margin-right: 6px;"></i>
+            This component operates as an autonomous node in the Zenab RTOS environment, processing at 1Hz frequency.
+        </div>
+    `;
+
+    modalBody.innerHTML = `
+        <div class="modal-details-grid">
+            <div class="modal-left-col">${leftColHtml}</div>
+            <div class="modal-right-col">${rightColHtml}</div>
+        </div>
+    `;
+}
+
+// ── Open / close ─────────────────────────────────────────────────────────────
+function openModal(compId) {
+    const meta = compMeta[compId];
+    if (!meta) return;
+    activeModalComp = compId;
+
+    // Header
+    modalIcon.className     = meta.icon;
+    modalIcon.style.color   = meta.iconColor;
+    modalTitle.textContent  = meta.title;
+    modalPinLabel.textContent = meta.pin;
+
+    // Body
+    buildModalBody(compId);
+
+    // Show
+    modalOverlay.classList.add('modal-open');
+
+    // Live refresh every 1 s
+    clearInterval(modalRefreshTimer);
+    modalRefreshTimer = setInterval(() => {
+        if (activeModalComp) buildModalBody(activeModalComp);
+    }, 1000);
+}
+
+function closeModal() {
+    modalOverlay.classList.remove('modal-open');
+    clearInterval(modalRefreshTimer);
+    activeModalComp = null;
+}
+
+// ── Event wiring ─────────────────────────────────────────────────────────────
+// Close button
+modalCloseBtn.addEventListener('click', closeModal);
+
+// Click outside modal card
+modalOverlay.addEventListener('click', (e) => {
+    if (e.target === modalOverlay) closeModal();
+});
+
+// ESC key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && activeModalComp) closeModal();
+});
+
+// Delegate maximize button clicks
+const clickRoot = document.querySelector('.board') || document.querySelector('.gallery-grid');
+if (clickRoot) {
+    clickRoot.addEventListener('click', (e) => {
+        const btn = e.target.closest('.comp-maximize-btn');
+        if (!btn) return;
+        e.stopPropagation();          
+        const compId = btn.dataset.comp;
+        if (compId) openModal(compId);
+    });
+}
+
+}; // end window.onload
+
